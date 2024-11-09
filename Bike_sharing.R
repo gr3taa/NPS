@@ -58,3 +58,57 @@ hist(T_stat,xlim=range(c(T_stat,T0)),breaks=30)
 abline(v=T0,col=3,lwd=2)
 p_val <- sum(T_stat>=T0)/B
 p_val#0
+
+#Multiple regression
+result<-lm(cnt ~ hum +temp + windspeed)
+summary(result)
+#Let’s start with a global test
+T0_glob <- summary(result)$adj.r.squared
+T_H0glob <- numeric(B)
+for(perm in 1:B){
+  permutation <- sample(n)
+  
+  Y.perm.glob <- cnt[permutation]
+  T_H0glob[perm] <- summary(lm(cnt ~ hum +temp + windspeed))$adj.r.squared
+}
+sum(T_H0glob>=T0_glob)/B#1
+
+T0_x1 <- abs(summary(result)$coefficients[2,1])
+T0_x2 <- abs(summary(result)$coefficients[3,3])
+T0_x3 <- abs(summary(result)$coefficients[4,3])
+
+regr.H01 <- lm(cnt~temp+windspeed)
+residuals.H01 <- regr.H01$residuals
+
+regr.H02 <- lm(cnt~hum+windspeed)
+residuals.H02 <- regr.H02$residuals
+
+regr.H03 <- lm(cnt~hum+temp)
+residuals.H03 <- regr.H03$residuals
+
+T_H01 <- T_H02 <- T_H03 <- numeric(B)
+
+for(perm in 1:B){
+  permutation <- sample(n)
+  
+  residuals.H01.perm <- residuals.H01[permutation]
+  Y.perm.H01 <- regr.H01$fitted + residuals.H01.perm
+  T_H01[perm] <- abs(summary(lm(Y.perm.H01 ~ hum+temp+windspeed))$coefficients[2,3])
+  
+  residuals.H02.perm <- residuals.H02[permutation]
+  Y.perm.H02 <- regr.H02$fitted + residuals.H02.perm
+  T_H02[perm] <- abs(summary(lm(Y.perm.H02 ~ hum+temp+windspeed))$coefficients[3,3])
+  
+  residuals.H03.perm <- residuals.H03[permutation]
+  Y.perm.H03 <- regr.H03$fitted + residuals.H03.perm
+  T_H03[perm] <- abs(summary(lm(Y.perm.H03 ~ hum+temp+windspeed))$coefficients[4,3])
+  
+}
+
+sum(T_H01>=T0_x1)/B#0
+sum(T_H02>=T0_x2)/B#0
+sum(T_H03>=T0_x3)/B#0.1
+
+
+
+detach(hour)
