@@ -33,3 +33,28 @@ col <- rep (color_vector, len)
 matplot(t(day[,17:40]), type='l', col=col)
 
 colori_nome <- sapply(color_vector, function(x) name_col(x))
+
+#Permutational ANOVA 
+attach(hour)
+B<-1000
+weathersit<-as.factor(weathersit)
+fit <- aov(cnt~weathersit)
+g<-nlevels(weathersit)
+n<-dim(hour)[1]
+summary(fit)
+plot(weathersit, cnt, xlab='weathersit',col=rainbow(g),main='Original Data')
+T0 <- summary(fit)[[1]][1,4]  # extract the test statistic
+T_stat <- numeric(B) 
+for(perm in 1:B){
+  # Permutation:
+  permutation <- sample(1:n)
+  cnt_perm <- cnt[permutation]
+  fit_perm <- aov(cnt_perm ~ weathersit)
+  
+  # Test statistic:
+  T_stat[perm] <- summary(fit_perm)[[1]][1,4]
+}
+hist(T_stat,xlim=range(c(T_stat,T0)),breaks=30)
+abline(v=T0,col=3,lwd=2)
+p_val <- sum(T_stat>=T0)/B
+p_val#0
