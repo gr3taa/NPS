@@ -22,7 +22,7 @@ hour_wide_sommato <- hour_wide %>%
 #Unisci `dati_giornalieri` e `dati_orari_wide` per data
 day <- day %>%
   left_join(hour_wide_sommato, by = "dteday")
-
+#grafici ---------------------------------
 matplot(t(day[,17:40]), type='l')
 
 mese_anno <- paste(day$yr, day$mnth, sep = "_")
@@ -31,8 +31,6 @@ len <- rle$lengths
 color_vector <- rainbow(24)
 col <- rep (color_vector, len)
 matplot(t(day[,17:40]), type='l', col=col)
-
-colori_nome <- sapply(color_vector, function(x) name_col(x))
 
 col_holyday <- ifelse(day$holiday ==1, 'red', 'blue')
 matplot(t(day[,17:40]), type='l', col=col_holyday)
@@ -47,7 +45,7 @@ prop_casual <- day$casual/day$cnt
 plot(prop_casual, col=col_working, pch=16)
 shapiro.test(prop_casual[col_working=='blue'])
 
-#Permutational ANOVA 
+#Permutational ANOVA ----------------------------------
 attach(hour)
 B<-1000
 weathersit<-as.factor(weathersit)
@@ -72,8 +70,8 @@ abline(v=T0,col=3,lwd=2)
 p_val <- sum(T_stat>=T0)/B
 p_val#0
 
-#Multiple regression
-result<-lm(cnt ~ hum +temp + windspeed)
+#Multiple regression ----------------------------------------
+result<-lm(cnt ~ hum +temp + windspeed + hr)
 summary(result)
 #Let’s start with a global test
 T0_glob <- summary(result)$adj.r.squared
@@ -82,13 +80,78 @@ for(perm in 1:B){
   permutation <- sample(n)
   
   Y.perm.glob <- cnt[permutation]
-  T_H0glob[perm] <- summary(lm(cnt ~ hum +temp + windspeed))$adj.r.squared
+  T_H0glob[perm] <- summary(lm(Y.perm.glob ~ hum +temp + windspeed +hr))$adj.r.squared
 }
-sum(T_H0glob>=T0_glob)/B#1
+sum(T_H0glob>=T0_glob)/B#0
 
-T0_x1 <- abs(summary(result)$coefficients[2,1])
-T0_x2 <- abs(summary(result)$coefficients[3,3])
-T0_x3 <- abs(summary(result)$coefficients[4,3])
+T0_x1 <- abs(summary(result)$adj.r.squared)
+T0_x2 <- abs(summary(result)$adj.r.squared)
+T0_x3 <- abs(summary(result)$adj.r.squared)
+T0_x4 <- abs(summary(result)$adj.r.squared)
+
+regr.H01 <- lm(cnt~temp+windspeed+hr)
+residuals.H01 <- regr.H01$residuals
+
+regr.H02 <- lm(cnt~hum+windspeed+hr)
+residuals.H02 <- regr.H02$residuals
+
+regr.H03 <- lm(cnt~hum+temp+hr)
+residuals.H03 <- regr.H03$residuals
+
+regr.H04 <- lm(cnt~hum+temp+windspeed)
+residuals.H04 <- regr.H04$residuals
+
+T_H01 <- T_H02 <- T_H03 <- T_H04 <- numeric(B)
+
+for(perm in 1:B){
+  permutation <- sample(n)
+  
+  residuals.H01.perm <- residuals.H01[permutation]
+  Y.perm.H01 <- regr.H01$fitted + residuals.H01.perm
+  T_H01[perm] <- abs(summary(lm(Y.perm.H01 ~ hum+temp+windspeed+hr))$adj.r.squared)
+  
+  residuals.H02.perm <- residuals.H02[permutation]
+  Y.perm.H02 <- regr.H02$fitted + residuals.H02.perm
+  T_H02[perm] <- abs(summary(lm(Y.perm.H02 ~ hum+temp+windspeed+hr))$adj.r.squared)
+  
+  residuals.H03.perm <- residuals.H03[permutation]
+  Y.perm.H03 <- regr.H03$fitted + residuals.H03.perm
+  T_H03[perm] <- abs(summary(lm(Y.perm.H03 ~ hum+temp+windspeed+hr))$adj.r.squared)
+  
+  residuals.H04.perm <- residuals.H04[permutation]
+  Y.perm.H04 <- regr.H04$fitted + residuals.H04.perm
+  T_H04[perm] <- abs(summary(lm(Y.perm.H04 ~ hum+temp+windspeed+hr))$adj.r.squared)
+  
+}
+
+sum(T_H01>=T0_x1)/B#0
+sum(T_H02>=T0_x2)/B#0
+sum(T_H03>=T0_x3)/B#0.5
+sum(T_H04>=T0_x4)/B#0
+
+detach(hour)
+
+attach(day)
+n<- dim(day)[1]
+result<-lm(cnt ~ hum +temp + windspeed)
+summary(result)
+shapiro.test(result$residuals)$p
+qqnorm(result$residuals)
+qqline(result$residuals)
+#Let’s start with a global test
+T0_glob <- summary(result)$adj.r.squared
+T_H0glob <- numeric(B)
+for(perm in 1:B){
+  permutation <- sample(n)
+  
+  Y.perm.glob <- cnt[permutation]
+  T_H0glob[perm] <- summary(lm(Y.perm.glob ~ hum +temp + windspeed))$adj.r.squared
+}
+sum(T_H0glob>=T0_glob)/B#0
+
+T0_x1 <- abs(summary(result)$adj.r.squared)
+T0_x2 <- abs(summary(result)$adj.r.squared)
+T0_x3 <- abs(summary(result)$adj.r.squared)
 
 regr.H01 <- lm(cnt~temp+windspeed)
 residuals.H01 <- regr.H01$residuals
@@ -106,22 +169,17 @@ for(perm in 1:B){
   
   residuals.H01.perm <- residuals.H01[permutation]
   Y.perm.H01 <- regr.H01$fitted + residuals.H01.perm
-  T_H01[perm] <- abs(summary(lm(Y.perm.H01 ~ hum+temp+windspeed))$coefficients[2,3])
+  T_H01[perm] <- abs(summary(lm(Y.perm.H01 ~ hum+temp+windspeed))$adj.r.squared)
   
   residuals.H02.perm <- residuals.H02[permutation]
   Y.perm.H02 <- regr.H02$fitted + residuals.H02.perm
-  T_H02[perm] <- abs(summary(lm(Y.perm.H02 ~ hum+temp+windspeed))$coefficients[3,3])
+  T_H02[perm] <- abs(summary(lm(Y.perm.H02 ~ hum+temp+windspeed))$adj.r.squared)
   
   residuals.H03.perm <- residuals.H03[permutation]
   Y.perm.H03 <- regr.H03$fitted + residuals.H03.perm
-  T_H03[perm] <- abs(summary(lm(Y.perm.H03 ~ hum+temp+windspeed))$coefficients[4,3])
-  
+  T_H03[perm] <- abs(summary(lm(Y.perm.H03 ~ hum+temp+windspeed))$adj.r.squared)
 }
 
-sum(T_H01>=T0_x1)/B#0
+sum(T_H01>=T0_x1)/B#0.01
 sum(T_H02>=T0_x2)/B#0
-sum(T_H03>=T0_x3)/B#0.1
-
-
-
-detach(hour)
+sum(T_H03>=T0_x3)/B#0.06
