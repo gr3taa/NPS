@@ -34,6 +34,19 @@ matplot(t(day[,17:40]), type='l', col=col)
 
 colori_nome <- sapply(color_vector, function(x) name_col(x))
 
+col_holyday <- ifelse(day$holiday ==1, 'red', 'blue')
+matplot(t(day[,17:40]), type='l', col=col_holyday)
+
+col_working <- ifelse(day$workingday==1, 'red', 'blue')
+matplot(t(day[,17:40]), type='l', col=col_working)
+
+col_weather <- rainbow(4)[day$weathersit]
+matplot(t(day[,17:40]), type='l', col=col_weather)
+
+prop_casual <- day$casual/day$cnt
+plot(prop_casual, col=col_working, pch=16)
+shapiro.test(prop_casual[col_working=='blue'])
+
 #Permutational ANOVA 
 attach(hour)
 B<-1000
