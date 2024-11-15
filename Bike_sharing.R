@@ -183,3 +183,14 @@ for(perm in 1:B){
 sum(T_H01>=T0_x1)/B#0.01
 sum(T_H02>=T0_x2)/B#0
 sum(T_H03>=T0_x3)/B#0.06
+
+library(splines)
+library(fda)
+library(roahd)
+fd=fData(0:23,(day[,17:40]))
+plot(fd)
+work_fd=subset(fd, day$workingday==1)
+plot(work_fd)
+we_fd=subset(fd, day$workingday==0)
+plot(we_fd)
+meandiff=(median_fData(work_fd,type='MBD'))-(median_fData(we_fd,type='MBD'))
