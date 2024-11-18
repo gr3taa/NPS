@@ -1,6 +1,6 @@
 
-day <- read.csv("day.csv")
-hour <- read.csv("hour.csv")
+day <- read.csv("Dataset/day.csv")
+hour <- read.csv("Dataset/hour.csv")
 library(dplyr)
 library(tidyr)
 #controllo quante osservazioni orarie per ogni giorno
@@ -71,6 +71,7 @@ p_val <- sum(T_stat>=T0)/B
 p_val#0
 
 #Multiple regression ----------------------------------------
+##Hours----
 result<-lm(cnt ~ hum +temp + windspeed + hr)
 summary(result)
 #Let’s start with a global test
@@ -130,7 +131,7 @@ sum(T_H03>=T0_x3)/B#0.5
 sum(T_H04>=T0_x4)/B#0
 
 detach(hour)
-
+##Day------
 attach(day)
 n<- dim(day)[1]
 result<-lm(cnt ~ hum +temp + windspeed)
@@ -184,6 +185,7 @@ sum(T_H01>=T0_x1)/B#0.01
 sum(T_H02>=T0_x2)/B#0
 sum(T_H03>=T0_x3)/B#0.06
 
+#fda----------
 library(splines)
 library(fda)
 library(roahd)
@@ -194,3 +196,4 @@ plot(work_fd)
 we_fd=subset(fd, day$workingday==0)
 plot(we_fd)
 meandiff=(median_fData(work_fd,type='MBD'))-(median_fData(we_fd,type='MBD'))
+
