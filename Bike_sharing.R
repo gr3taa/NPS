@@ -197,3 +197,58 @@ we_fd=subset(fd, day$workingday==0)
 plot(we_fd)
 meandiff=(median_fData(work_fd,type='MBD'))-(median_fData(we_fd,type='MBD'))
 
+
+#Seconda domanda grafici-------------
+col_working <- ifelse(day$workingday==1, 'red', 'blue')
+plot(day$casual)
+plot(day$registered)
+#Trasforma `dati_orari` per avere una colonna per ogni ora
+hour_wide_register <- hour %>%
+  pivot_wider(
+    names_from = hr, 
+    values_from = registered,
+    names_prefix = "cnt_hour_reg"
+  )
+hour_wide_casual <- hour %>%
+  pivot_wider(
+    names_from = hr, 
+    values_from = casual,
+    names_prefix = "cnt_hour_cas"
+  )
+#dataset che compatta le righe
+hour_wide_sommato_reg <- hour_wide_register %>%
+  group_by(dteday) %>%
+  summarise(across(starts_with("cnt_hour_reg"), sum, na.rm = TRUE))
+hour_wide_sommato_cas <- hour_wide_casual %>%
+  group_by(dteday) %>%
+  summarise(across(starts_with("cnt_hour_cas"), sum, na.rm = TRUE))
+
+matplot(t(hour_wide_sommato_reg[,2:25]), type='l')
+matplot(t(hour_wide_sommato_cas[,2:25]), type='l')
+
+#sign paired test-----
+t1 = day$registered
+t2 = day$casual
+
+wilcox.test(x=t1, y=t2, paired=T, alternative = "greater")
+# p-value < 2.2e-16
+# alternative hypothesis: true location shift is greater than 0
+Y <- t1-t2
+n <- length(Y)
+ranks <- rank(abs(Y))
+W.plus  <- sum(ranks[Y > 0])
+W.minus <- sum(ranks[Y < 0])
+set.seed(24021979)
+B<-1000
+W.sim <- numeric(B)
+for (k in 1:B)
+{
+  ranks.temp <- sample(1:n)
+  signs.temp <- 2*rbinom(n, 1, 0.5) - 1
+  W.temp <- sum(signs.temp*ranks.temp)
+  W.sim[k] <- W.temp
+}
+
+hist(W.sim, xlim=c(-n*(n+1)/2, n*(n+1)/2), breaks = 50)
+abline(v = W.plus, col='red')
+abline(v = 0, lwd=3)
