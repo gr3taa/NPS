@@ -37,6 +37,10 @@ matplot(t(day[,17:40]), type='l', col=col_holyday)
 
 col_working <- ifelse(day$workingday==1, 'red', 'blue')
 matplot(t(day[,17:40]), type='l', col=col_working)
+matplot(t(day[, 17:40]), 
+        type = 'l', 
+        col = ifelse(day$workingday == 1, 'blue', 
+                     ifelse(day$holiday == 1, 'red', 'green')))
 
 col_weather <- rainbow(4)[day$weathersit]
 matplot(t(day[,17:40]), type='l', col=col_weather)
@@ -185,19 +189,48 @@ sum(T_H01>=T0_x1)/B#0.01
 sum(T_H02>=T0_x2)/B#0
 sum(T_H03>=T0_x3)/B#0.06
 
-#fda----------
-library(splines)
-library(fda)
-library(roahd)
-fd=fData(0:23,(day[,17:40]))
-plot(fd)
+#fda working----------
+w1_fd=subset(fd, day$weathersit==1)
+plot(w1_fd)
+w2_fd=subset(fd, day$weathersit==2)
+plot(w2_fd)
+w3_fd=subset(fd, day$weathersit==3)
+plot(w3_fd)
+
+weathersit <- day$weathersit
+ITP.result <- ITPaovbspline(day_hour ~ weathersit, B=1000,nknots=20,order=3,method="responses") #ITPlmbspline per la regressione
+summary(ITP.result)
+plot(ITP.result,plot.adjpval = TRUE, xrange=c(0,23))
+
+#fda weather --------------------
 work_fd=subset(fd, day$workingday==1)
 plot(work_fd)
 we_fd=subset(fd, day$workingday==0)
 plot(we_fd)
-meandiff=(median_fData(work_fd,type='MBD'))-(median_fData(we_fd,type='MBD'))
+meandiff=median_fData(work_fd,type='MBD')-median_fData(we_fd,type='MBD')
+plot(meandiff)
+T0=(sum(abs(meandiff$values)))
+pool_fd=append_fData(work_fd,we_fd)
+n_m <- 500
+T0_perm = numeric(B)
+for(perm in 1:B){
+  permutation <- sample(n)
+  pool_perm=pool_fd[permutation,]
+  perm_m = pool_perm[1:n_m,] 
+  perm_f = pool_perm[(n_m+1):n,] 
+  med_m = median_fData(perm_m,type='MBD')
+  med_f = median_fData(perm_f,type='MBD')
+  meandiff=fData (0:23, med_m$values - med_f$values) 
+  T0_perm[perm]=sum(abs(meandiff$values))
+}
+sum(T0_perm >=T0)/B
 
-
+library(fdatest)
+groups <- day$workingday
+day_hour <- as.matrix(day[,17:40])
+ITP.result <- ITPaovbspline(day_hour ~ groups, B=1000,nknots=20,order=3,method="responses") #ITPlmbspline per la regressione
+summary(ITP.result)
+plot(ITP.result,plot.adjpval = TRUE, xrange=c(0,23))
 #Seconda domanda grafici-------------
 col_working <- ifelse(day$workingday==1, 'red', 'blue')
 plot(day$casual)
