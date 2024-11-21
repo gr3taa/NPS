@@ -231,36 +231,47 @@ day_hour <- as.matrix(day[,17:40])
 ITP.result <- ITPaovbspline(day_hour ~ groups, B=1000,nknots=20,order=3,method="responses") #ITPlmbspline per la regressione
 summary(ITP.result)
 plot(ITP.result,plot.adjpval = TRUE, xrange=c(0,23))
-#Seconda domanda grafici-------------
+#Grafici casual user-------------
 col_working <- ifelse(day$workingday==1, 'red', 'blue')
 plot(day$casual)
 plot(day$registered)
+col_holyday <- ifelse(day$holiday ==1, 'red', 'blue')
+matplot(t(day1[,41:64]), type='l', col=col_holyday)
+
+col_working <- ifelse(day$workingday==1, 'red', 'blue')
+matplot(t(day1[,41:64]), type='l', col=col_working)
+
+col_weekday <- ifelse(day$weekday==1, 'red', 'blue')
+#dataset casual e registered----------------------
 #Trasforma `dati_orari` per avere una colonna per ogni ora
 hour_wide_register <- hour %>%
   pivot_wider(
     names_from = hr, 
     values_from = registered,
-    names_prefix = "cnt_hour_reg"
+    names_prefix = "cnt_hour_"
   )
 hour_wide_casual <- hour %>%
   pivot_wider(
     names_from = hr, 
     values_from = casual,
-    names_prefix = "cnt_hour_cas"
+    names_prefix = "cnt_hour_"
   )
 #dataset che compatta le righe
 hour_wide_sommato_reg <- hour_wide_register %>%
   group_by(dteday) %>%
-  summarise(across(starts_with("cnt_hour_reg"), sum, na.rm = TRUE))
+  summarise(across(starts_with("cnt_hour_"), sum, na.rm = TRUE))
 hour_wide_sommato_cas <- hour_wide_casual %>%
   group_by(dteday) %>%
-  summarise(across(starts_with("cnt_hour_cas"), sum, na.rm = TRUE))
-
+  summarise(across(starts_with("cnt_hour_"), sum, na.rm = TRUE))
+day1 <- day %>%
+  left_join(hour_wide_sommato_cas, by = "dteday")
+day2<- day %>%
+  left_join(hour_wide_sommato_reg, by = "dteday")
 matplot(t(hour_wide_sommato_reg[,2:25]), type='l')
 matplot(t(hour_wide_sommato_cas[,2:25]), type='l')
 
 #sign paired test-----
-##Casual vs Registered---
+##Casual vs Registered----------------
 t1 = day$registered
 t2 = day$casual
 
@@ -286,30 +297,92 @@ for (k in 1:B)
 hist(W.sim, xlim=c(-n*(n+1)/2, n*(n+1)/2), breaks = 50)
 abline(v = W.plus, col='red')
 abline(v = 0, lwd=3)
-## Casual weekday vs weekend---
-t1 = day$casual[day$workingday==0]
-t2 = day$casual[day$workingday==1]
+#Two multivariate populations test (Permutational test)---------------------
+##Casual vs Registered ---------------------
+t1 = day1[,41:64]
+t2 = day2[,41:64]
 
+t1.mean = colMeans(t1)
+t2.mean = colMeans(t2)
 
-wilcox.test(x=t1, y=t2, paired=T, alternative = "greater")
-# p-value < 2.2e-16
-# alternative hypothesis: true location shift is greater than 0
-Y <- t1-t2
-n <- length(Y)
-ranks <- rank(abs(Y))
-W.plus  <- sum(ranks[Y > 0])
-W.minus <- sum(ranks[Y < 0])
-set.seed(24021979)
+matplot(seq(0,23),
+        t(rbind(t1.mean,t2.mean)), 
+        type='l', col=c(1,2), lty=1,
+        main="Sample multivariate means")
+
+n1 = dim(t1)[1]
+n2 = dim(t2)[1]
+n  = n1 + n2
+
+T20 = as.numeric(t(t1.mean-t2.mean) %*% (t1.mean-t2.mean))  # matrix (vector) product
+#T20 <- norm(t1.mean-t2.mean) same as before
+T20
 B<-1000
-W.sim <- numeric(B)
-for (k in 1:B)
-{
-  ranks.temp <- sample(1:n)
-  signs.temp <- 2*rbinom(n, 1, 0.5) - 1
-  W.temp <- sum(signs.temp*ranks.temp)
-  W.sim[k] <- W.temp
+T2 = numeric(B)
+set.seed(19)
+for(perm in 1:B){
+  # Random permutation of indexes
+  # When we apply permutations in a multivariate case, we keep the units together
+  # i.e., we only permute the rows of the data matrix
+  t_pooled = rbind(t1,t2)
+  permutation = sample(n)
+  t_perm = t_pooled[permutation,]
+  t1_perm = t_perm[1:n1,]
+  t2_perm = t_perm[(n1+1):n,]
+  
+  # Evaluation of the test statistic on permuted data
+  t1.mean_perm = colMeans(t1_perm)
+  t2.mean_perm = colMeans(t2_perm)
+  T2[perm]  = t(t1.mean_perm-t2.mean_perm) %*% (t1.mean_perm-t2.mean_perm) 
 }
+hist(T2,xlim=range(c(T2,T20)))
+abline(v=T20,col=3,lwd=4)
+p_val = sum(T2>=T20)/B
+p_val#0
 
-hist(W.sim, xlim=c(-n*(n+1)/2, n*(n+1)/2), breaks = 50)
-abline(v = W.plus, col='red')
-abline(v = 0, lwd=3)
+##Casual working day vs weekend-------------------------------
+a<-subset(day1,day1$workingday==1)
+matplot(t(a[,41:64]), type='l')
+b<-subset(day1,day1$workingday==0)
+matplot(t(b[,41:64]), type='l')
+
+t1 = a[,41:64]
+t2 = b[,41:64]
+
+t1.mean = colMeans(t1)
+t2.mean = colMeans(t2)
+
+matplot(seq(0,23),
+        t(rbind(t1.mean,t2.mean)), 
+        type='l', col=c(1,2), lty=1,
+        main="Sample multivariate means")
+
+n1 = dim(t1)[1]
+n2 = dim(t2)[1]
+n  = n1 + n2
+
+T20 = as.numeric(t(t1.mean-t2.mean) %*% (t1.mean-t2.mean))  # matrix (vector) product
+#T20 <- norm(t1.mean-t2.mean) same as before
+T20
+B<-1000
+T2 = numeric(B)
+set.seed(19)
+for(perm in 1:B){
+  # Random permutation of indexes
+  # When we apply permutations in a multivariate case, we keep the units together
+  # i.e., we only permute the rows of the data matrix
+  t_pooled = rbind(t1,t2)
+  permutation = sample(n)
+  t_perm = t_pooled[permutation,]
+  t1_perm = t_perm[1:n1,]
+  t2_perm = t_perm[(n1+1):n,]
+  
+  # Evaluation of the test statistic on permuted data
+  t1.mean_perm = colMeans(t1_perm)
+  t2.mean_perm = colMeans(t2_perm)
+  T2[perm]  = t(t1.mean_perm-t2.mean_perm) %*% (t1.mean_perm-t2.mean_perm) 
+}
+hist(T2,xlim=range(c(T2,T20)))
+abline(v=T20,col=3,lwd=4)
+p_val = sum(T2>=T20)/B
+p_val#0
