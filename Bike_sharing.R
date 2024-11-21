@@ -227,8 +227,36 @@ matplot(t(hour_wide_sommato_reg[,2:25]), type='l')
 matplot(t(hour_wide_sommato_cas[,2:25]), type='l')
 
 #sign paired test-----
+##Casual vs Registered---
 t1 = day$registered
 t2 = day$casual
+
+wilcox.test(x=t1, y=t2, paired=T, alternative = "greater")
+# p-value < 2.2e-16
+# alternative hypothesis: true location shift is greater than 0
+Y <- t1-t2
+n <- length(Y)
+ranks <- rank(abs(Y))
+W.plus  <- sum(ranks[Y > 0])
+W.minus <- sum(ranks[Y < 0])
+set.seed(24021979)
+B<-1000
+W.sim <- numeric(B)
+for (k in 1:B)
+{
+  ranks.temp <- sample(1:n)
+  signs.temp <- 2*rbinom(n, 1, 0.5) - 1
+  W.temp <- sum(signs.temp*ranks.temp)
+  W.sim[k] <- W.temp
+}
+
+hist(W.sim, xlim=c(-n*(n+1)/2, n*(n+1)/2), breaks = 50)
+abline(v = W.plus, col='red')
+abline(v = 0, lwd=3)
+## Casual weekday vs weekend---
+t1 = day$casual[day$workingday==0]
+t2 = day$casual[day$workingday==1]
+
 
 wilcox.test(x=t1, y=t2, paired=T, alternative = "greater")
 # p-value < 2.2e-16
