@@ -231,6 +231,36 @@ day_hour <- as.matrix(day[,17:40])
 ITP.result <- ITPaovbspline(day_hour ~ groups, B=1000,nknots=20,order=3,method="responses") #ITPlmbspline per la regressione
 summary(ITP.result)
 plot(ITP.result,plot.adjpval = TRUE, xrange=c(0,23))
+# working day vs non working day----------------
+a<-subset(day,day$workingday==1)
+matplot(t(a[,17:40]), type='l')
+b<-subset(day,day$workingday==0)
+matplot(t(b[,17:40]), type='l')
+##distribuzione della variabile cnt-------------------------
+x<- a$cnt
+y<-b$cnt
+perm_t_test=function(x,y,iter=1e3){
+  T0=abs(mean(x)-mean(y))  # define the test statistic
+  T_stat=numeric(iter) # a vector to store the values of each iteration
+  x_pooled=c(x,y) # pooled sample
+  n=length(x_pooled)
+  n1=length(x)
+  print(sprintf("Using %s iterations to estimate the permutational distribution. There are actually %s possible permutations", iter, factorial(n)))
+  for(perm in 1:iter){ # loop for conditional MC
+    # permutation:
+    permutation <- sample(1:n)
+    x_perm <- x_pooled[permutation]
+    x1_perm <- x_perm[1:n1]
+    x2_perm <- x_perm[(n1+1):n]
+    # test statistic:
+    T_stat[perm] <- abs(mean(x1_perm) - mean(x2_perm))
+  }
+  # p-value
+  p_val <- sum(T_stat>=T0)/iter
+  return(p_val)
+}
+p.value <- perm_t_test(x,y,iter=1e3) #0.093
+
 #Grafici casual user-------------
 col_working <- ifelse(day$workingday==1, 'red', 'blue')
 plot(day$casual)
