@@ -386,3 +386,21 @@ hist(T2,xlim=range(c(T2,T20)))
 abline(v=T20,col=3,lwd=4)
 p_val = sum(T2>=T20)/B
 p_val#0
+
+
+#regression ------------------
+plot(day$cnt, day$temp, col=col_working, pch=16)
+boxplot(day$cnt ~ day$workingday)
+
+attach(day)
+fm <- lm(cnt ~ temp + hu)
+summary(fm)
+plot(fm$residuals)
+
+model_linear_spline <- lm(cnt ~ bs(temp, knots=c(10000),degree=3), data=day)
+temp.grid=(seq(range(temp)[1],range(temp)[2],by=0.01))
+preds=predict(model_linear_spline,list(temp=temp.grid),se=T)
+se.bands=cbind(preds$fit +2* preds$se.fit ,preds$fit -2* preds$se.fit)
+with(day, plot(temp ,cnt ,xlim=range(temp.grid) ,cex =.5, col =" darkgrey ",main='Custom cut Fit'))
+lines(temp.grid,preds$fit ,lwd =2, col =" blue")
+matlines(temp.grid ,se.bands ,lwd =1, col =" blue",lty =3)
