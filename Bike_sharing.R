@@ -261,6 +261,14 @@ perm_t_test=function(x,y,iter=1e3){
 }
 p.value <- perm_t_test(x,y,iter=1e3) #0.093
 
+#outlier detection with roahd---------------
+fd<-fData(seq(0,23),(day[,17:40]))
+plot(fd)
+invisible(fbplot(fd, main="Magnitude outliers"))
+invisible(outliergram(fd))
+out_shape <- outliergram(fd, display = FALSE)
+out_shape$ID_outliers
+
 #Grafici casual user-------------
 col_working <- ifelse(day$workingday==1, 'red', 'blue')
 plot(day$casual)
@@ -461,4 +469,19 @@ with(day, plot(temp ,cnt ,xlim=range(temp.grid) ,cex =.5, col =" darkgrey ",main
 lines(temp.grid,preds$fit ,lwd =2, col =" blue")
 matlines(temp.grid ,se.bands ,lwd =1, col =" blue",lty =3)
 
+#Spearman's correlation index between casual and registered----------
+fCasual<-fData(seq(0,23),(day1[,41:64]))
+fRegistered<-fData(seq(0,23),(day2[,41:64]))
+bivariate_data <- as.mfData(list(fCasual, fRegistered))
+plot(bivariate_data)
+cor_spearman(bivariate_data, ordering='MHI')#0.7146697
 
+#outlier detection with roahd---------------
+invisible(fbplot(fCasual, main="Magnitude outliers"))
+invisible(outliergram(fCasual))
+out_shape <- outliergram(fCasual, display = FALSE)
+out_shape$ID_outliers
+invisible(fbplot(fRegistered, main="Magnitude outliers"))
+invisible(outliergram(fRegistered))
+out_shape <- outliergram(fRegistered, display = FALSE)
+out_shape$ID_outliers
