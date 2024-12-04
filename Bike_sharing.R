@@ -336,6 +336,7 @@ p_val#0
 
 #sign paired test-----
 ##Casual vs Registered----------------
+# D: la distribuzione di t1 e t2 non dovrebbe essere simmetrica? 
 t1 = day$registered
 t2 = day$casual
 
