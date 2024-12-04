@@ -300,6 +300,32 @@ day2<- day %>%
 matplot(t(hour_wide_sommato_reg[,2:25]), type='l')
 matplot(t(hour_wide_sommato_cas[,2:25]), type='l')
 
+#Permutational ANOVA ---------------------
+attach(hour)
+B<-1000
+weathersit<-as.factor(weathersit)
+fit <- aov(casual~weathersit)
+g<-nlevels(weathersit)
+n<-dim(hour)[1]
+summary(fit)
+plot(weathersit, casual, xlab='weathersit',col=rainbow(g),main='Original Data')
+T0 <- summary(fit)[[1]][1,4]  # extract the test statistic
+T_stat <- numeric(B) 
+for(perm in 1:B){
+  # Permutation:
+  permutation <- sample(1:n)
+  cnt_perm <- casual[permutation]
+  fit_perm <- aov(cnt_perm ~ weathersit)
+  
+  # Test statistic:
+  T_stat[perm] <- summary(fit_perm)[[1]][1,4]
+}
+hist(T_stat,xlim=range(c(T_stat,T0)),breaks=30)
+abline(v=T0,col=3,lwd=2)
+p_val <- sum(T_stat>=T0)/B
+p_val#0
+
+
 #sign paired test-----
 ##Casual vs Registered----------------
 t1 = day$registered
@@ -423,7 +449,7 @@ plot(day$cnt, day$temp, col=col_working, pch=16)
 boxplot(day$cnt ~ day$workingday)
 
 attach(day)
-fm <- lm(cnt ~ temp + hu)
+fm <- lm(cnt ~ temp + hum)
 summary(fm)
 plot(fm$residuals)
 
@@ -434,3 +460,5 @@ se.bands=cbind(preds$fit +2* preds$se.fit ,preds$fit -2* preds$se.fit)
 with(day, plot(temp ,cnt ,xlim=range(temp.grid) ,cex =.5, col =" darkgrey ",main='Custom cut Fit'))
 lines(temp.grid,preds$fit ,lwd =2, col =" blue")
 matlines(temp.grid ,se.bands ,lwd =1, col =" blue",lty =3)
+
+
