@@ -454,6 +454,7 @@ p_val#0
 
 
 #regression ------------------
+library(splines)
 plot(day$cnt, day$temp, col=col_working, pch=16)
 boxplot(day$cnt ~ day$workingday)
 
@@ -469,6 +470,17 @@ se.bands=cbind(preds$fit +2* preds$se.fit ,preds$fit -2* preds$se.fit)
 with(day, plot(temp ,cnt ,xlim=range(temp.grid) ,cex =.5, col =" darkgrey ",main='Custom cut Fit'))
 lines(temp.grid,preds$fit ,lwd =2, col =" blue")
 matlines(temp.grid ,se.bands ,lwd =1, col =" blue",lty =3)
+
+library(mgcv)
+model_gam=gam(cnt ~ instant + s(temp,bs='cr'))
+summary(model_gam)
+alpha <- 
+anova(model_gam,model_linear_spline, test = "F") 
+grid=expand.grid(instant,temp.grid)
+names(grid)=c('instant','temp')
+pred_gam=predict(model_gam,newdata=grid)
+persp3d(instant,temp.grid,pred_gam,col='grey30')
+points3d(instant,temp,cnt,col='black',size=5)
 
 #Spearman's correlation index between casual and registered----------
 fCasual<-fData(seq(0,23),(day1[,41:64]))
