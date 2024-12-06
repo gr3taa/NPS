@@ -269,6 +269,56 @@ invisible(outliergram(fd))
 out_shape <- outliergram(fd, display = FALSE)
 out_shape$ID_outliers
 
+#Permutational ANOVA: cnt/weather-workingday---------------------
+attach(day)
+workingday<-as.factor(workingday)
+summary.aov(aov(cnt ~ weathersit + workingday + weathersit:workingday)) 
+T0_workingday_weathersit <- summary.aov(aov(cnt ~ workingday + weathersit + workingday:weathersit))[[1]][3,4]  # extract the test statistic
+T0_workingday_weathersit
+aov.H0workingday_weathersit <- aov(cnt ~ workingday + weathersit)
+aov.H0workingday_weathersit
+residuals.H0workingday_weathersit <- aov.H0workingday_weathersit$residuals # estimate residuals
+n = dim(day)[1]
+B<-1000
+T_workingday_weathersit <- numeric(B)
+for(perm in 1:B){
+  permutation <- sample(n)
+  # permute the residuals
+  residuals.H0workingday_weathersit <- residuals.H0workingday_weathersit[permutation]
+  cnt.perm.H0workingday_weathersit <- aov.H0workingday_weathersit$fitted + residuals.H0workingday_weathersit
+  # re-fit full model to calculate statistic
+  T_workingday_weathersit[perm] <- summary.aov(aov(cnt.perm.H0workingday_weathersit ~ workingday + weathersit + workingday:weathersit))[[1]][3,4]
+}
+sum(T_workingday_weathersit >= T0_workingday_weathersit)/B # 0.61
+# interaction factor is not significant
+T0_workingday <- summary.aov(aov(cnt ~ workingday + weathersit))[[1]][1,4]
+# residuals under H0:
+# cnt = mu + beta*weathersit
+aov.H0workingday <- aov(cnt ~ weathersit)
+residuals.H0workingday <- aov.H0workingday$residuals
+
+# Test for weathersit
+T0_weathersit <- summary.aov(aov(cnt ~ workingday + weathersit))[[1]][2,4]
+# residuals under H0:
+# cnt = mu + alpha*workingday
+aov.H0weathersit <- aov(cnt ~ workingday)
+residuals.H0weathersit <- aov.H0weathersit$residuals
+B <- 1000
+T_weathersit <- T_workingday <- numeric(B)
+for(perm in 1:B){
+  permutation <- sample(n)
+  
+  # Test workingday
+  cnt.perm.H0workingday <- aov.H0workingday$fitted + residuals.H0workingday[permutation]
+  T_workingday[perm] <- summary.aov(aov(cnt.perm.H0workingday ~ workingday + weathersit))[[1]][1,4]
+  
+  # Test weathersit
+  cnt.perm.H0weathersit <- aov.H0weathersit$fitted + residuals.H0weathersit[permutation]
+  T_weathersit[perm] <- summary.aov(aov(cnt.perm.H0weathersit ~ workingday + weathersit))[[1]][2,4]
+}
+sum(T_workingday >= T0_workingday)/B#0.124
+sum(T_weathersit >= T0_weathersit)/B#0
+
 #Grafici casual user-------------
 col_working <- ifelse(day$workingday==1, 'red', 'blue')
 plot(day$casual)
