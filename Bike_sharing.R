@@ -336,7 +336,6 @@ p_val#0
 
 #sign paired test-----
 ##Casual vs Registered----------------
-# D: la distribuzione di t1 e t2 non dovrebbe essere simmetrica? 
 t1 = day$registered
 t2 = day$casual
 
@@ -498,3 +497,29 @@ invisible(fbplot(fRegistered, main="Magnitude outliers"))
 invisible(outliergram(fRegistered))
 out_shape <- outliergram(fRegistered, display = FALSE)
 out_shape$ID_outliers
+
+#Permutational ANOVA: prop_casual/weather---------------------
+attach(day)
+B<-1000
+weathersit<-as.factor(weathersit)
+fit <- aov(prop_casual~weathersit)
+g<-nlevels(weathersit)
+n<-dim(day)[1]
+summary(fit)
+plot(weathersit, prop_casual, xlab='weathersit',col=rainbow(g),main='Original Data')
+T0 <- summary(fit)[[1]][1,4]  # extract the test statistic
+T_stat <- numeric(B) 
+for(perm in 1:B){
+  # Permutation:
+  permutation <- sample(1:n)
+  cnt_perm <- prop_casual[permutation]
+  fit_perm <- aov(cnt_perm ~ weathersit)
+  
+  # Test statistic:
+  T_stat[perm] <- summary(fit_perm)[[1]][1,4]
+}
+hist(T_stat,xlim=range(c(T_stat,T0)),breaks=30)
+abline(v=T0,col=3,lwd=2)
+p_val <- sum(T_stat>=T0)/B
+p_val#0
+detach(day)
