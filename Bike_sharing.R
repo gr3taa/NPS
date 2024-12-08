@@ -512,7 +512,7 @@ fm <- lm(cnt ~ temp + hum)
 summary(fm)
 plot(fm$residuals)
 
-model_linear_spline <- lm(cnt ~ bs(temp, knots=c(10000),degree=3), data=day)
+model_linear_spline <- lm(cnt ~ bs(temp, knots=c(1000),degree=3), data=day)#D: knots=c(0.7)
 temp.grid=(seq(range(temp)[1],range(temp)[2],by=0.01))
 preds=predict(model_linear_spline,list(temp=temp.grid),se=T)
 se.bands=cbind(preds$fit +2* preds$se.fit ,preds$fit -2* preds$se.fit)
