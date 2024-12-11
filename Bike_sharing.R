@@ -40,7 +40,9 @@ matplot(t(day[,17:40]), type='l', col=col_working)
 matplot(t(day[, 17:40]), 
         type = 'l', 
         col = ifelse(day$workingday == 1, 'blue', 
-                     ifelse(day$holiday == 1, 'red', 'green')))
+                     ifelse(day$holiday == 1, 'red', 'green')),xlab="hour", ylab="users")
+legend("topleft", legend=c("working day","weekend", "holiday"), col=c("blue","green","red"), lty=1, lwd=2, cex=0.75)
+legend("topleft", legend = c("working day","weekend", "holiday"),fill=c("blue","green","red"), text.col = c("blue","green","red"),cex = 0.8)
 
 col_weather <- rainbow(4)[day$weathersit]
 matplot(t(day[,17:40]), type='l', col=col_weather)
@@ -197,8 +199,10 @@ plot(w2_fd)
 w3_fd=subset(fd, day$weathersit==3)
 plot(w3_fd)
 
+library(fdatest)
+day_hour <- as.matrix(day[,17:40])
 weathersit <- day$weathersit
-ITP.result <- ITPaovbspline(day_hour ~ weathersit, B=1000,nknots=20,order=3,method="responses") #ITPlmbspline per la regressione
+ITP.result <- ITPaovbspline(day_hour ~ weathersit, B=1000,nknots=20,order=3,method="responses") 
 summary(ITP.result)
 plot(ITP.result,plot.adjpval = TRUE, xrange=c(0,23))
 
@@ -225,12 +229,10 @@ for(perm in 1:B){
 }
 sum(T0_perm >=T0)/B
 
-library(fdatest)
 groups <- day$workingday
-day_hour <- as.matrix(day[,17:40])
 ITP.result <- ITPaovbspline(day_hour ~ groups, B=1000,nknots=20,order=3,method="responses") #ITPlmbspline per la regressione
 summary(ITP.result)
-plot(ITP.result,plot.adjpval = TRUE, xrange=c(0,23))
+plot(ITP.result,plot.adjpval = TRUE, xrange=c(0,23), )
 # working day vs non working day----------------
 a<-subset(day,day$workingday==1)
 matplot(t(a[,17:40]), type='l')
@@ -330,6 +332,10 @@ col_working <- ifelse(day$workingday==1, 'red', 'blue')
 matplot(t(day1[,41:64]), type='l', col=col_working)
 
 col_weekday <- ifelse(day$weekday==1, 'red', 'blue')
+matplot(cbind(t(day2[,41:64]), t(day1[,41:64])),col=c(rep("blue", 731), rep("red", 731)), type='l')
+par(mfrow=c(1,2))
+matplot(t(day2[,41:64]), type='l', ylim=c(0,900), xlab="hour", main="Registered users")
+matplot(t(day1[,41:64]), type='l', ylim=c(0,900), xlab="hour", main="Casual users")
 #dataset casual e registered----------------------
 #Trasforma `dati_orari` per avere una colonna per ogni ora
 hour_wide_register <- hour %>%
@@ -512,13 +518,21 @@ fm <- lm(cnt ~ temp + hum)
 summary(fm)
 plot(fm$residuals)
 
-model_linear_spline <- lm(cnt ~ bs(temp, knots=c(1000),degree=3), data=day)#D: knots=c(0.7)
+model_linear_spline <- lm(cnt ~ bs(temp, knots=c(1),degree=3), data=day)#D: knots=c(0.7)
 temp.grid=(seq(range(temp)[1],range(temp)[2],by=0.01))
 preds=predict(model_linear_spline,list(temp=temp.grid),se=T)
 se.bands=cbind(preds$fit +2* preds$se.fit ,preds$fit -2* preds$se.fit)
-with(day, plot(temp ,cnt ,xlim=range(temp.grid) ,cex =.5, col =" darkgrey ",main='Custom cut Fit'))
+with(day, plot(temp ,cnt ,xlim=range(temp.grid) ,cex =.5, col =" darkgrey ",xlab="temperature", ylab="users"))
 lines(temp.grid,preds$fit ,lwd =2, col =" blue")
 matlines(temp.grid ,se.bands ,lwd =1, col =" blue",lty =3)
+
+model_linear_spline <- lm(cnt ~ bs(hum, knots=c(1),degree=3), data=day)#D: knots=c(0.7)
+hum.grid=(seq(range(hum)[1],range(hum)[2],by=0.01))
+preds=predict(model_linear_spline,list(hum=hum.grid),se=T)
+se.bands=cbind(preds$fit +2* preds$se.fit ,preds$fit -2* preds$se.fit)
+with(day, plot(hum ,cnt ,xlim=range(hum.grid) ,cex =.5, col =" darkgrey ",xlab="humidity", ylab="users"))
+lines(hum.grid,preds$fit ,lwd =2, col =" blue")
+matlines(hum.grid ,se.bands ,lwd =1, col =" blue",lty =3)
 
 library(mgcv)
 model_gam=gam(cnt ~ instant + s(temp,bs='cr'))
@@ -573,3 +587,6 @@ abline(v=T0,col=3,lwd=2)
 p_val <- sum(T_stat>=T0)/B
 p_val#0
 detach(day)
+
+col_season=ifelse(day$season==1,'blue',ifelse(day$season==2,'green', ifelse(day$season==3,'yellow','red')))
+matplot(t(day1[,41:64]/day[,17:40]), col=col_season, type='l')
