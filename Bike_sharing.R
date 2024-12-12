@@ -51,6 +51,10 @@ prop_casual <- day$casual/day$cnt
 plot(prop_casual, col=col_working, pch=16)
 shapiro.test(prop_casual[col_working=='blue'])
 
+ggplot(day, aes(x = as.factor(weathersit), y = cnt)) +
+  geom_boxplot() +
+  labs(title = "Rentals by Weather Situation", x = "Weather Situation", y = "Total Rentals")
+
 #Permutational ANOVA ----------------------------------
 attach(hour)
 B<-1000
