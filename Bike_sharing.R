@@ -532,6 +532,7 @@ rapp2 <- 1/mean(cnt2011[80:171]/cnt2012[80:171])
 rapp3 <- 1/mean(cnt2011[172:265]/cnt2012[172:265])
 rapp4 <- 1/mean(cnt2011[c(266:301,304:354)]/cnt2012[c(266:301,304:354)])
 cnt_rapp <- c(day$cnt[1:365],cnt2012[1:79]/rapp1,cnt2012[80:171]/rapp2,cnt2012[172:265]/rapp3,cnt2012[266:354]/rapp4,cnt2012[355:365])
+cnt_rapp <- c(cnt_rapp[1:424],day$cnt[425]/rapp1,cnt_rapp[425:730])
 
 cnt_diff <- day$cnt - 2204*day$yr
 se_diff <- sum((cnt_diff[1:365]-cnt_diff[c(366:424,426:731)])^2)
@@ -540,19 +541,19 @@ plot(cnt_rapp[1:365], col=rep('red',365))
 points(cnt_rapp[c(366:424,426:731)], col=rep('blue',36))
   
 
-model_linear_spline1 <- lm(cnt ~ bs(temp, knots=c(1),degree=3), data=day)#D: knots=c(0.7)
+model_linear_spline1 <- lm(cnt_rapp ~ bs(temp, knots=c(1),degree=3), data=day)#D: knots=c(0.7)
 temp.grid=(seq(range(temp)[1],range(temp)[2],by=0.01))
 preds=predict(model_linear_spline1,list(temp=temp.grid),se=T)
 se.bands=cbind(preds$fit +2* preds$se.fit ,preds$fit -2* preds$se.fit)
-with(day, plot(temp ,cnt ,xlim=range(temp.grid) ,cex =.5, col =" darkgrey ",xlab="temperature", ylab="users"))
+with(day, plot(temp ,cnt_rapp ,xlim=range(temp.grid) ,cex =.5, col =" darkgrey ",xlab="temperature", ylab="users"))
 lines(temp.grid,preds$fit ,lwd =2, col =" blue")
 matlines(temp.grid ,se.bands ,lwd =1, col =" blue",lty =3)
 
-model_linear_spline2 <- lm(cnt ~ bs(hum, knots=c(1),degree=3), data=day)#D: knots=c(0.7)
+model_linear_spline2 <- lm(cnt_rapp ~ bs(hum, knots=c(1),degree=3), data=day)#D: knots=c(0.7)
 hum.grid=(seq(range(hum)[1],range(hum)[2],by=0.01))
 preds=predict(model_linear_spline2,list(hum=hum.grid),se=T)
 se.bands=cbind(preds$fit +2* preds$se.fit ,preds$fit -2* preds$se.fit)
-with(day, plot(hum ,cnt ,xlim=range(hum.grid) ,cex =.5, col =" darkgrey ",xlab="humidity", ylab="users"))
+with(day, plot(hum ,cnt_rapp ,xlim=range(hum.grid) ,cex =.5, col =" darkgrey ",xlab="humidity", ylab="users"))
 lines(hum.grid,preds$fit ,lwd =2, col =" blue")
 matlines(hum.grid ,se.bands ,lwd =1, col =" blue",lty =3)
 
@@ -568,7 +569,7 @@ persp3d(instant,temp.grid,pred_gam,col='grey30')
 points3d(instant,temp,cnt,col='black',size=5)
 
 
-model_gam=gam(cnt ~ s(hum,bs='cr') + s(temp,bs='cr'))
+model_gam=gam(cnt_rapp ~ s(hum,bs='cr') + s(temp,bs='cr'))
 summary(model_gam)
 anova(model_gam,model_linear_spline1, test = "F") 
 anova(model_gam,model_linear_spline2, test = "F") 
@@ -576,7 +577,7 @@ grid=expand.grid(hum.grid,temp.grid)
 names(grid)=c('hum','temp')
 pred_gam=predict(model_gam,newdata=grid)
 persp3d(hum.grid,temp.grid,pred_gam,col='grey30')
-points3d(hum,temp,cnt,col='black',size=5)
+points3d(hum,temp,cnt_rapp,col='black',size=5)
 
 #Spearman's correlation index between casual and registered----------
 fCasual<-fData(seq(0,23),(day1[,41:64]))
