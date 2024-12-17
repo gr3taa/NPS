@@ -534,7 +534,6 @@ rapp4 <- 1/mean(cnt2011[c(266:301,304:354)]/cnt2012[c(266:301,304:354)])
 cnt_rapp <- c(day$cnt[1:365],cnt2012[1:79]/rapp1,cnt2012[80:171]/rapp2,cnt2012[172:265]/rapp3,cnt2012[266:354]/rapp4,cnt2012[355:365])
 
 cnt_diff <- day$cnt - 2204*day$yr
-cnt_rapp <- c(day$cnt[1:365],day$cnt[366:731]/1.882771)
 se_diff <- sum((cnt_diff[1:365]-cnt_diff[c(366:424,426:731)])^2)
 se_rapp <- sum((cnt_rapp[1:365]-cnt_rapp[c(366:424,426:731)])^2)
 plot(cnt_rapp[1:365], col=rep('red',365))
