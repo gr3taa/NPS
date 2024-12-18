@@ -624,3 +624,144 @@ detach(day)
 
 col_season=ifelse(day$season==1,'blue',ifelse(day$season==2,'green', ifelse(day$season==3,'yellow','red')))
 matplot(t(day1[,41:64]/day[,17:40]), col=col_season, type='l')
+
+
+# Conformal Prediction----------------------------------------------------------
+library(dplyr) 
+library(ggplot2)
+library(knitr)
+library(broom)
+library(tidyr)
+library(progress)
+library(pbapply)
+library(dbscan)
+library(gridExtra)
+library(fda)
+library(roahd)
+library(conformalInference.fd)
+
+day2011= subset(day, day$yr==0)
+day2012= subset(day, day$yr==1)
+
+a<-subset(day,day$workingday==1)
+a2011 = subset(day2011,day2011$workingday==1)
+a2012 = subset(day2012,day2012$workingday==1)
+
+b<-subset(day,day$workingday==0)
+b2011 = subset(day2011,day2011$workingday==0)
+b2012 = subset(day2012,day2012$workingday==0)
+
+par(mfrow=c(1,2))
+matplot(t(a2012[,17:40]), type='l', col='darkorange', ylim = c(0,1100), main = "2012 working day")
+matplot(t(b2012[,17:40]), type='l', col = 'forestgreen', ylim = c(0,1100), main= "2012 weekend")
+
+# 2012 workingday 5-20
+dataset <- a2012
+x.grid <- 5:20
+f_data <- fData(x.grid, dataset[,22:37])
+rho <- 0.5 # train and calibration split ratio
+
+alpha = 0.1
+
+l <- dim(dataset)[1] - ceiling(dim(dataset)[1] * rho)
+alpha_rag <- c(seq(1/(l+1), l/(l+1), 1/(l+1)))
+
+fun=mean_lists()
+x0=list(as.list(x.grid))
+
+band <- conformal.fun.split(NULL, NULL, f_data, NULL, x0, fun$train.fun, fun$predict.fun,
+                            alpha = alpha,
+                            split=NULL, seed=2024, randomized=FALSE, seed.rand=FALSE,
+                            verbose=FALSE, rho=rho, s.type="st-dev")
+
+upper_b_a <- band$up[[1]][[1]]
+lower_b_a <- band$lo[[1]][[1]]
+point_pred_a <- band$pred[[1]][[1]]
+
+# 2012 weekend 5-20
+dataset <- b2012
+x.grid <- 5:20
+f_data <- fData(x.grid, dataset[,22:37])
+rho <- 0.5 # train and calibration split ratio
+
+alpha = 0.1
+
+l <- dim(dataset)[1] - ceiling(dim(dataset)[1] * rho)
+alpha_rag <- c(seq(1/(l+1), l/(l+1), 1/(l+1)))
+
+fun=mean_lists()
+x0=list(as.list(x.grid))
+
+band <- conformal.fun.split(NULL, NULL, f_data, NULL, x0, fun$train.fun, fun$predict.fun,
+                            alpha = alpha,
+                            split=NULL, seed=2024, randomized=FALSE, seed.rand=FALSE,
+                            verbose=FALSE, rho=rho, s.type="st-dev")
+
+upper_b_b <- band$up[[1]][[1]]
+lower_b_b <- band$lo[[1]][[1]]
+point_pred_b <- band$pred[[1]][[1]]
+
+
+par(mfrow=c(1,2))
+plot(x.grid, upper_b_a, type='l', col="black", lty=2, xlab="hour", ylab="cnt", lwd=1.5,
+     ylim=c(-200,1100),
+     main="Functional CP band working day 2012")
+lines(x.grid, point_pred_a, type='l', col="darkorange", lwd=1.5)
+lines(x.grid, lower_b_a, type='l', col="black", lty=2, lwd=1.5)
+
+plot(x.grid, upper_b_b, type='l', col="black", lty=2, xlab="hour", ylab="cnt", lwd=1.5,
+     ylim=c(-200,1100),
+     main="Functional CP band weekend 2012")
+lines(x.grid, point_pred_b, type='l', col="forestgreen", lwd=1.5)
+lines(x.grid, lower_b_b, type='l', col="black", lty=2, lwd=1.5)
+
+
+# non adaptive
+par(mfrow=c(1,2))
+
+dataset <- a[, 22:37]
+alpha = 0.1
+x.grid <- 5:20
+n = nrow(dataset)
+i1 = sample(1:n,n/2)
+t_set = dataset[i1,] #training test
+c_set = dataset[-i1,] #calibration set
+n.cal = dim(c_set)[1]
+mu = colMeans(t_set)
+Mu = matrix(mu, nrow=n.cal, ncol=length(mu), byrow=TRUE)
+res = abs(c_set - Mu)
+ncm = apply(res, 1, max) #max res for each age
+ncm.quantile = quantile(ncm, prob=(1-alpha)*(n.cal+1)/n.cal)
+
+upper_b_a = mu + ncm.quantile
+lower_b_a = mu - ncm.quantile
+
+plot(x.grid, upper_b_a, type='l', col="black", lty=2, xlab="hour", ylab="cnt",
+     lwd=1.5, ylim=c(-200,1100),
+     main="Non-adaptive functional CP for working day")
+lines(x.grid, mu, type='l', col="darkorange", lwd=1.5)
+lines(x.grid, lower_b_a, type='l', col="black", lty=2, lwd=1.5)
+
+dataset <- b[, 22:37]
+alpha = 0.1
+x.grid <- 5:20
+n = nrow(dataset)
+i1 = sample(1:n,n/2)
+t_set = dataset[i1,] #training test
+c_set = dataset[-i1,] #calibration set
+n.cal = dim(c_set)[1]
+mu = colMeans(t_set)
+Mu = matrix(mu, nrow=n.cal, ncol=length(mu), byrow=TRUE)
+res = abs(c_set - Mu)
+ncm = apply(res, 1, max) #max res for each age
+ncm.quantile = quantile(ncm, prob=(1-alpha)*(n.cal+1)/n.cal)
+
+upper_b_b = mu + ncm.quantile
+lower_b_b = mu - ncm.quantile
+
+plot(x.grid, upper_b_b, type='l', col="black", lty=2, xlab="hour", ylab="cnt",
+     lwd=1.5, ylim=c(-200,1100),
+     main="Non-adaptive functional CP for weekend")
+lines(x.grid, mu, type='l', col="forestgreen", lwd=1.5)
+lines(x.grid, lower_b_b, type='l', col="black", lty=2, lwd=1.5)
+
