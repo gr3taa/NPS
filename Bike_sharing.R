@@ -541,7 +541,7 @@ plot(cnt_rapp[1:365], col=rep('red',365))
 points(cnt_rapp[c(366:424,426:731)], col=rep('blue',36))
   
 
-model_linear_spline1 <- lm(cnt_rapp ~ bs(temp, knots=c(1),degree=3), data=day)#D: knots=c(0.7)
+model_linear_spline1 <- lm(cnt_rapp ~ bs(temp, knots=c(0.3,0.7),degree=3), data=day)#D: knots=c(0.7)
 temp.grid=(seq(range(temp)[1],range(temp)[2],by=0.01))
 preds=predict(model_linear_spline1,list(temp=temp.grid),se=T)
 se.bands=cbind(preds$fit +2* preds$se.fit ,preds$fit -2* preds$se.fit)
@@ -549,7 +549,7 @@ with(day, plot(temp ,cnt_rapp ,xlim=range(temp.grid) ,cex =.5, col =" darkgrey "
 lines(temp.grid,preds$fit ,lwd =2, col =" blue")
 matlines(temp.grid ,se.bands ,lwd =1, col =" blue",lty =3)
 
-model_linear_spline2 <- lm(cnt_rapp ~ bs(hum, knots=c(1),degree=3), data=day)#D: knots=c(0.7)
+model_linear_spline2 <- lm(cnt_rapp ~ bs(hum, knots=c(0.3,0.7),degree=3), data=day)#D: knots=c(0.7)
 hum.grid=(seq(range(hum)[1],range(hum)[2],by=0.01))
 preds=predict(model_linear_spline2,list(hum=hum.grid),se=T)
 se.bands=cbind(preds$fit +2* preds$se.fit ,preds$fit -2* preds$se.fit)
