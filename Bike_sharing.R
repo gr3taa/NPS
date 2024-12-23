@@ -587,13 +587,27 @@ plot(bivariate_data)
 cor_spearman(bivariate_data, ordering='MHI')#0.7146697
 
 #outlier detection with roahd---------------
-invisible(fbplot(fCasual, main="Magnitude outliers"))
+fbplot <- invisible(fbplot(fCasual, main="Magnitude outliers"))
+fbplot$ID_outliers
 invisible(outliergram(fCasual))
 out_shape <- outliergram(fCasual, display = FALSE)
 out_shape$ID_outliers
-invisible(fbplot(fRegistered, main="Magnitude outliers"))
-invisible(outliergram(fRegistered))
-out_shape <- outliergram(fRegistered, display = FALSE)
+
+fRegistered_work<- fData(seq(0,23),subset((day2[,41:64]),workingday==1))
+fb <-invisible(fbplot(fRegistered_work, main="Magnitude outliers"))
+fb$ID_outliers
+invisible(outliergram(fRegistered_work))
+out_shape <- outliergram(fRegistered_work, display = FALSE)
+out_shape$ID_outliers
+
+fRegistered_we<- fData(seq(0,23),subset((day2[,41:64]),workingday==0))
+fb <-invisible(fbplot(fRegistered_we, main="Magnitude outliers"))
+fb$ID_outliers #solo perché holiday ma evidentemente si lavora lo stesso
+fRegistered_we<- fData(seq(0,23),subset((day2[,41:64]),workingday==0 & day$holiday==0))
+fb <-invisible(fbplot(fRegistered_we, main="Magnitude outliers"))
+fb$ID_outliers
+invisible(outliergram(fRegistered_we))
+out_shape <- outliergram(fRegistered_we, display = FALSE)
 out_shape$ID_outliers
 
 #Permutational ANOVA: prop_casual/weather---------------------
