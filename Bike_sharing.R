@@ -267,36 +267,36 @@ perm_t_test=function(x,y,iter=1e3){
 }
 p.value <- perm_t_test(x,y,iter=1e3) #0.093
 
-#outlier detection with roahd---------------
-fd<-fData(seq(0,23),(day[,17:40]))
-plot(fd)
-invisible(fbplot(fd, main="Magnitude outliers"))
-invisible(outliergram(fd))
-out_shape <- outliergram(fd, display = FALSE)
-out_shape$ID_outliers
+# #outlier detection with roahd---------------
+# fd<-fData(seq(0,23),(day[,17:40]))
+# plot(fd)
+# invisible(fbplot(fd, main="Magnitude outliers"))
+# invisible(outliergram(fd))
+# out_shape <- outliergram(fd, display = FALSE)
+# out_shape$ID_outliers
 
 #Permutational ANOVA: cnt/weather-workingday---------------------
-attach(day)
-workingday<-as.factor(workingday)
-summary.aov(aov(cnt ~ weathersit + workingday + weathersit:workingday)) 
-T0_workingday_weathersit <- summary.aov(aov(cnt ~ workingday + weathersit + workingday:weathersit))[[1]][3,4]  # extract the test statistic
-T0_workingday_weathersit
-aov.H0workingday_weathersit <- aov(cnt ~ workingday + weathersit)
-aov.H0workingday_weathersit
-residuals.H0workingday_weathersit <- aov.H0workingday_weathersit$residuals # estimate residuals
-n = dim(day)[1]
-B<-1000
-T_workingday_weathersit <- numeric(B)
-for(perm in 1:B){
-  permutation <- sample(n)
-  # permute the residuals
-  residuals.H0workingday_weathersit <- residuals.H0workingday_weathersit[permutation]
-  cnt.perm.H0workingday_weathersit <- aov.H0workingday_weathersit$fitted + residuals.H0workingday_weathersit
-  # re-fit full model to calculate statistic
-  T_workingday_weathersit[perm] <- summary.aov(aov(cnt.perm.H0workingday_weathersit ~ workingday + weathersit + workingday:weathersit))[[1]][3,4]
-}
-sum(T_workingday_weathersit >= T0_workingday_weathersit)/B # 0.61
-# interaction factor is not significant
+# attach(day)
+# workingday<-as.factor(workingday)
+# summary.aov(aov(cnt ~ weathersit + workingday + weathersit:workingday)) 
+# T0_workingday_weathersit <- summary.aov(aov(cnt ~ workingday + weathersit + workingday:weathersit))[[1]][3,4]  # extract the test statistic
+# T0_workingday_weathersit
+# aov.H0workingday_weathersit <- aov(cnt ~ workingday + weathersit)
+# aov.H0workingday_weathersit
+# residuals.H0workingday_weathersit <- aov.H0workingday_weathersit$residuals # estimate residuals
+# n = dim(day)[1]
+# B<-1000
+# T_workingday_weathersit <- numeric(B)
+# for(perm in 1:B){
+#   permutation <- sample(n)
+#   # permute the residuals
+#   residuals.H0workingday_weathersit <- residuals.H0workingday_weathersit[permutation]
+#   cnt.perm.H0workingday_weathersit <- aov.H0workingday_weathersit$fitted + residuals.H0workingday_weathersit
+#   # re-fit full model to calculate statistic
+#   T_workingday_weathersit[perm] <- summary.aov(aov(cnt.perm.H0workingday_weathersit ~ workingday + weathersit + workingday:weathersit))[[1]][3,4]
+# }
+# sum(T_workingday_weathersit >= T0_workingday_weathersit)/B # 0.61
+# # interaction factor is not significant
 T0_workingday <- summary.aov(aov(cnt ~ workingday + weathersit))[[1]][1,4]
 # residuals under H0:
 # cnt = mu + beta*weathersit
@@ -512,7 +512,7 @@ p_val = sum(T2>=T20)/B
 p_val#0
 
 
-#regression ------------------
+#regression multivariate ------------------
 library(splines)
 plot(day$cnt, day$temp, col=col_working, pch=16)
 boxplot(day$cnt ~ day$workingday)
@@ -524,6 +524,32 @@ plot(fm$residuals)
 
 fm <- lm(cnt ~ instant)
 summary(fm)
+
+#ANOVA anno
+
+
+anno<-as.factor(day$yr)
+fit <- aov(day$cnt~anno)
+g<-nlevels(anno)
+n<-dim(day)[1]
+summary(fit)
+plot(anno, day$cnt, xlab='anno',col=rainbow(g),main='Original Data')
+T0 <- summary(fit)[[1]][1,4]  # extract the test statistic
+T_stat <- numeric(B) 
+for(perm in 1:B){
+  # Permutation:
+  permutation <- sample(1:n)
+  cnt_perm <- day$cnt[permutation]
+  fit_perm <- aov(cnt_perm ~ anno)
+  
+  # Test statistic:
+  T_stat[perm] <- summary(fit_perm)[[1]][1,4]
+}
+hist(T_stat,xlim=range(c(T_stat,T0)),breaks=30)
+abline(v=T0,col=3,lwd=2)
+p_val <- sum(T_stat>=T0)/B
+p_val#0
+
 
 cnt2011 <- day$cnt[1:365]
 cnt2012 <- day$cnt[c(366:424,426:731)]
@@ -540,6 +566,27 @@ se_rapp <- sum((cnt_rapp[1:365]-cnt_rapp[c(366:424,426:731)])^2)
 plot(cnt_rapp[1:365], col=rep('red',365))
 points(cnt_rapp[c(366:424,426:731)], col=rep('blue',36))
   
+fit <- aov(cnt_rapp~anno)
+summary(fit)
+plot(anno, cnt_rapp, xlab='anno',col=rainbow(g),main='Original Data')
+T0 <- summary(fit)[[1]][1,4]  # extract the test statistic
+T_stat <- numeric(B) 
+for(perm in 1:B){
+  # Permutation:
+  permutation <- sample(1:n)
+  cnt_perm <- cnt_rapp[permutation]
+  fit_perm <- aov(cnt_perm ~ anno)
+  
+  # Test statistic:
+  T_stat[perm] <- summary(fit_perm)[[1]][1,4]
+}
+hist(T_stat,xlim=range(c(T_stat,T0)),breaks=30)
+abline(v=T0,col=3,lwd=2)
+p_val <- sum(T_stat>=T0)/B
+p_val #0.33
+
+
+
 
 model_linear_spline1 <- lm(cnt_rapp ~ bs(temp,degree=3, df=5), data=day)#D: knots=c(0.7)
 temp.grid=(seq(range(temp)[1],range(temp)[2],by=0.01))
@@ -558,26 +605,28 @@ lines(hum.grid,preds$fit ,lwd =2, col =" blue")
 matlines(hum.grid ,se.bands ,lwd =1, col =" blue",lty =3)
 
 library(mgcv)
-model_gam=gam(cnt ~ instant + s(temp,bs='cr'))
-summary(model_gam)
-alpha <- 
-anova(model_gam,model_linear_spline, test = "F") 
-grid=expand.grid(instant,temp.grid)
-names(grid)=c('instant','temp')
-pred_gam=predict(model_gam,newdata=grid)
-persp3d(instant,temp.grid,pred_gam,col='grey30')
-points3d(instant,temp,cnt,col='black',size=5)
 
-
-model_gam=gam(cnt_rapp ~ s(hum,bs='cr') + s(temp,bs='cr'))
+model_gam=gam(cnt_rapp ~ s(hum,bs='cr') + s(temp,bs='cr'), data=day)
 summary(model_gam)
 anova(model_gam,model_linear_spline1, test = "F") 
 anova(model_gam,model_linear_spline2, test = "F") 
 grid=expand.grid(hum.grid,temp.grid)
 names(grid)=c('hum','temp')
 pred_gam=predict(model_gam,newdata=grid)
+library(rgl)
+open3d()
 persp3d(hum.grid,temp.grid,pred_gam,col='grey30')
+attach(day)
 points3d(hum,temp,cnt_rapp,col='black',size=5)
+
+
+model_gam_tp = gam(cnt_rapp ~ s(hum, temp, bs="tp", m=2), # m for order
+                   data = day)
+pred_tp = predict(model_gam_tp,
+                  newdata = (grid))
+open3d()
+persp3d(hum.grid,temp.grid, pred_tp, col = 'grey30')
+points3d(hum, temp, cnt_rapp, col = 'red', size = 5)
 
 #Spearman's correlation index between casual and registered----------
 fCasual<-fData(seq(0,23),(day1[,41:64]))
