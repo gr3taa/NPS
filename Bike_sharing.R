@@ -828,3 +828,164 @@ plot(x.grid, upper_b_b, type='l', col="black", lty=2, xlab="hour", ylab="cnt",
 lines(x.grid, mu, type='l', col="forestgreen", lwd=1.5)
 lines(x.grid, lower_b_b, type='l', col="black", lty=2, lwd=1.5)
 
+
+
+## standardizzazione casual-----------------
+day_casual <- day$casual
+cnt2011 <- day_casual[1:365]
+cnt2012 <- day_casual[c(366:424,426:731)]
+plot(cnt2011, col=rep('red',365),ylim = c(0,max(cnt2012)))
+points(cnt2012, col=rep('blue',365))
+rapp1 <- 1/mean(cnt2011[1:79]/cnt2012[1:79])
+rapp2 <- 1/mean(cnt2011[80:171]/cnt2012[80:171])
+rapp3 <- 1/mean(cnt2011[172:265]/cnt2012[172:265])
+rapp4 <- 1/mean(cnt2011[c(266:301,304:354)]/cnt2012[c(266:301,304:354)])
+cnt_rapp <- c(day_casual[1:365],cnt2012[1:79]/rapp1,cnt2012[80:171]/rapp2,cnt2012[172:265]/rapp3,cnt2012[266:354]/rapp4,cnt2012[355:365])
+cnt_rapp <- c(cnt_rapp[1:424],day_casual[425]/rapp1,cnt_rapp[425:730])
+plot(cnt_rapp[1:365], col=rep('red',365))
+points(cnt_rapp[c(366:424,426:731)], col=rep('blue',36))
+day$cnt_rapp <- cnt_rapp
+
+## ANOVA cnt causal-year-----------------------
+B<-1000
+yr<-as.factor(day$yr)
+fit <- aov(casual~yr)
+g<-nlevels(yr)
+n<-dim(day)[1]
+summary(fit)
+plot(yr, casual, xlab='yr',col=rainbow(g),main='Original Data')
+T0 <- summary(fit)[[1]][1,4]  # extract the test statistic
+T_stat <- numeric(B) 
+for(perm in 1:B){
+  # Permutation:
+  permutation <- sample(1:n)
+  cnt_perm <- casual[permutation]
+  fit_perm <- aov(cnt_perm ~ yr)
+  
+  # Test statistic:
+  T_stat[perm] <- summary(fit_perm)[[1]][1,4]
+}
+hist(T_stat,xlim=range(c(T_stat,T0)),breaks=30)
+abline(v=T0,col=3,lwd=2)
+p_val <- sum(T_stat>=T0)/B
+p_val#0
+
+
+## ANoVA cnt_rapp-year-----------------------
+B<-1000
+yr<-as.factor(day$yr)
+fit <- aov(cnt_rapp~yr)
+g<-nlevels(yr)
+n<-dim(day)[1]
+summary(fit)
+plot(yr, cnt_rapp, xlab='yr',col=rainbow(g),main='Original Data')
+T0 <- summary(fit)[[1]][1,4]  # extract the test statistic
+T_stat <- numeric(B) 
+for(perm in 1:B){
+  # Permutation:
+  permutation <- sample(1:n)
+  cnt_perm <- cnt_rapp[permutation]
+  fit_perm <- aov(cnt_perm ~ yr)
+  
+  # Test statistic:
+  T_stat[perm] <- summary(fit_perm)[[1]][1,4]
+}
+hist(T_stat,xlim=range(c(T_stat,T0)),breaks=30)
+abline(v=T0,col=3,lwd=2)
+p_val <- sum(T_stat>=T0)/B
+p_val#0
+
+par(mfrow=c(1,2))
+plot(yr, casual, xlab='yr',col=rainbow(g),main='Original Data')
+plot(yr, cnt_rapp, xlab='yr',col=rainbow(g),main='Original Data')
+
+## Regression test casual----------------------------------
+attach(day)
+n<- dim(day)[1]
+result<-lm(day_casual ~ hum +temp + windspeed)
+summary(result)
+shapiro.test(result$residuals)$p
+qqnorm(result$residuals)
+qqline(result$residuals)
+#Let’s start with a global test
+B<-1000
+T0_glob <- summary(result)$adj.r.squared
+T_H0glob <- numeric(B)
+for(perm in 1:B){
+  permutation <- sample(n)
+  
+  Y.perm.glob <- day_casual[permutation]
+  T_H0glob[perm] <- summary(lm(Y.perm.glob ~ hum +temp + windspeed))$adj.r.squared
+}
+sum(T_H0glob>=T0_glob)/B#0
+
+T0_x1 <- abs(summary(result)$adj.r.squared)
+T0_x2 <- abs(summary(result)$adj.r.squared)
+T0_x3 <- abs(summary(result)$adj.r.squared)
+
+regr.H01 <- lm(day_casual~temp+windspeed)
+residuals.H01 <- regr.H01$residuals
+
+regr.H02 <- lm(day_casual~hum+windspeed)
+residuals.H02 <- regr.H02$residuals
+
+regr.H03 <- lm(day_casual~hum+temp)
+residuals.H03 <- regr.H03$residuals
+
+T_H01 <- T_H02 <- T_H03 <- numeric(B)
+
+for(perm in 1:B){
+  permutation <- sample(n)
+  
+  residuals.H01.perm <- residuals.H01[permutation]
+  Y.perm.H01 <- regr.H01$fitted + residuals.H01.perm
+  T_H01[perm] <- abs(summary(lm(Y.perm.H01 ~ hum+temp+windspeed))$adj.r.squared)
+  
+  residuals.H02.perm <- residuals.H02[permutation]
+  Y.perm.H02 <- regr.H02$fitted + residuals.H02.perm
+  T_H02[perm] <- abs(summary(lm(Y.perm.H02 ~ hum+temp+windspeed))$adj.r.squared)
+  
+  residuals.H03.perm <- residuals.H03[permutation]
+  Y.perm.H03 <- regr.H03$fitted + residuals.H03.perm
+  T_H03[perm] <- abs(summary(lm(Y.perm.H03 ~ hum+temp+windspeed))$adj.r.squared)
+}
+
+sum(T_H01>=T0_x1)/B#0.114 0.129
+sum(T_H02>=T0_x2)/B#0
+sum(T_H03>=T0_x3)/B#0.307 0.311
+
+## Splines casual--------------
+model_linear_spline1 <- lm(day_casual ~ bs(temp,degree=3, df=5), data=day)#D: knots=c(0.7)
+temp.grid=(seq(range(temp)[1],range(temp)[2],by=0.01))
+preds=predict(model_linear_spline1,list(temp=temp.grid),se=T)
+se.bands=cbind(preds$fit +2* preds$se.fit ,preds$fit -2* preds$se.fit)
+with(day, plot(temp ,day_casual ,xlim=range(temp.grid) ,cex =.5, col =" darkgrey ",xlab="temperature", ylab="users"))
+lines(temp.grid,preds$fit ,lwd =2, col =" blue")
+matlines(temp.grid ,se.bands ,lwd =1, col =" blue",lty =3)
+hist(day_casual)
+
+## QUantile regression casual ------------------------
+library(quantreg)
+with(day, plot(temp ,day_casual ,xlim=range(temp.grid) ,cex =.5, col =" darkgrey ",xlab="temperature", ylab="users"))
+X <- model.matrix(day_casual ~ bs(temp, df=15),data=day)
+for(tau in (1:3)/4){
+  fit <- rq(day_casual ~ bs(temp, df=15), tau=0.95, data=day)
+  accel.fit <- X %*% fit$coef
+  with(day,lines(temp,accel.fit))
+}
+
+fit2 <- summary(rq(day_casual~temp,tau=c(.05, .25, .5, .75, .95)))
+
+plot(fit2,mfrow = c(1,2))
+
+
+plot(temp,day_casual,cex=.25,type="n",xlab="Household temp", ylab="Food Expenditure")
+points(temp,day_casual,cex=.5,col="blue")
+abline(rq(day_casual~temp,tau=.5),col="blue") 
+abline(lm(day_casual~temp),lty=2,col="red") #the dreaded ols line
+taus <- c(.05,.1,.25,.75,.90,.95)
+
+for( i in 1:length(taus)){
+  abline(rq(day_casual~temp,tau=taus[i]),col="gray")
+}
+
