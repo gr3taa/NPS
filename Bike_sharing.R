@@ -711,8 +711,8 @@ a2011 = subset(day2011,day2011$workingday==1)
 a2012 = subset(day2012,day2012$workingday==1)
 
 b<-subset(day,day$workingday==0)
-b2011 = subset(day2011,day2011$workingday==0)
-b2012 = subset(day2012,day2012$workingday==0)
+b2011 = subset(day2011,day2011$workingday==0 & day2011$holiday==0)
+b2012 = subset(day2012,day2012$workingday==0 & day2012$holiday==0)
 
 par(mfrow=c(1,2))
 matplot(t(a2012[,17:40]), type='l', col='darkorange', ylim = c(0,1100), main = "2012 working day")
@@ -988,4 +988,81 @@ taus <- c(.05,.1,.25,.75,.90,.95)
 for( i in 1:length(taus)){
   abline(rq(day_casual~temp,tau=taus[i]),col="gray")
 }
+
+
+
+#conformal prediction casual -----------------
+working <- subset(day, workingday==1)
+we <- subset (day, workingday==0)
+par(mfrow=c(1,2))
+plot(working$temp, working$casual, ylim=c(0,3500))
+plot(we$temp, we$casual, ylim=c(0,3500))
+
+reg_split_normalized_conformal <- function(x, y, x.test, alpha){
+  n <- length(y)
+  n.train <- floor(n/2)
+  n.calib <- n-n.train
+  
+  # Split the data into training and calibrations sets
+  idxs.train <- sample(1:n, size=n.train)
+  
+  x.train <- x[idxs.train]
+  y.train <- y[idxs.train]
+  x.calib <- x[-idxs.train]
+  y.calib <- y[-idxs.train]
+  
+  data <- data.frame("x"=x.train, "y"=y.train)
+  mod <- lm(y~x, data)
+  
+  ## Estimate how difficult it is to predict points on the calibration set
+  epsilon.train <- abs(mod$residuals)
+  log_residuals <- log(epsilon.train + 1e-6)
+  difficulty_model <- lm(log_residuals ~ I(x^2), data)
+  
+  y.calib.hat <- predict(mod, newdata = data.frame("x" = x.calib))
+  residuals <- abs(y.calib - y.calib.hat)
+  
+  # Predict sigma on the calibration set
+  sigma.calib <- delta + exp(predict(difficulty_model, newdata = data.frame("x" = x.calib)))
+  ncs.calib <- residuals / sigma.calib
+  ncs.quantile <- quantile(ncs.calib, prob=(1-alpha)*(n.calib+1)/n.calib)
+  
+  # Construct the prediction interval
+  y.test.hat <- predict(mod, newdata = data.frame("x" = x.test))
+  sigma.test.hat <- exp(predict(difficulty_model, newdata = data.frame("x" = x.test)))
+  lower_bound <- y.test.hat - ncs.quantile * sigma.test.hat
+  upper_bound <- y.test.hat + ncs.quantile * sigma.test.hat
+  
+  out <- list("lower_bound"=lower_bound,
+              "upper_bound"=upper_bound)
+  
+}
+
+
+evaluate_predictions <- function(x.test, y.test, x.grid, lower, upper, view_plot=T, delta){
+  covered <- (y.test >= lower)*(y.test<=upper)
+  coverage <- mean(covered)
+  width <- mean(upper-lower)
+  
+  if(view_plot){
+    idx.sort <- sort(x.test$x, index.return=TRUE)$ix
+    plot(x.test$x[idx.sort], y.test[idx.sort], col='lightblue', main=paste0("Prediction interval, alpha=",alpha, ", coverage=", round(coverage,2), ", width=", round(width,2)),
+         xlab="x test", ylab="y test")
+    lines(x.test$x[idx.sort], lower[idx.sort], lty=3, col='black', lwd=2)
+    lines(x.test$x[idx.sort], upper[idx.sort], lty=3, col='black', lwd=2)
+  }
+  
+  out <- list("coverage"=coverage,
+              "width"=width)
+  return(out)
+}
+# Nominal significance level
+alpha <- .1
+pi.conformal <- reg_split_normalized_conformal(working$temp, working$casual, working$temp, alpha)
+x.test <- data.frame("x"=working$temp)
+performance <- evaluate_predictions(x.test, working$casual, lower=pi.conformal$lower_bound, upper=pi.conformal$upper_bound, 0)
+
+pi.conformal <- reg_split_normalized_conformal(we$temp, we$casual, we$temp, alpha)
+x.test <- data.frame("x"=we$temp)
+performance <- evaluate_predictions(x.test, we$casual, lower=pi.conformal$lower_bound, upper=pi.conformal$upper_bound, 2)
 
