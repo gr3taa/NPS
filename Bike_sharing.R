@@ -606,11 +606,12 @@ matlines(hum.grid ,se.bands ,lwd =1, col =" blue",lty =3)
 
 library(mgcv)
 
-model_gam=gam(cnt_rapp ~ s(hum,bs='cr') + s(temp,bs='cr'), data=day)
+model_gam=gam(cnt ~ instant + s(hum,bs='cr') + s(temp,bs='cr') + s(I(hum*temp),bs='cr'), data=day)
 summary(model_gam)
 anova(model_gam,model_linear_spline1, test = "F") 
 anova(model_gam,model_linear_spline2, test = "F") 
 grid=expand.grid(hum.grid,temp.grid)
+grid <- data.frame(grid)
 names(grid)=c('hum','temp')
 pred_gam=predict(model_gam,newdata=grid)
 library(rgl)
@@ -620,10 +621,12 @@ attach(day)
 points3d(hum,temp,cnt_rapp,col='black',size=5)
 
 
-model_gam_tp = gam(cnt_rapp ~ s(hum, temp, bs="tp", m=2), # m for order
+model_gam_tp = gam(cnt ~ instant + s(hum, temp, bs="tp", m=2), # m for order
                    data = day)
+summary(model_gam_tp)
+
 pred_tp = predict(model_gam_tp,
-                  newdata = (grid))
+                  newdata = (grid), type="response")
 open3d()
 persp3d(hum.grid,temp.grid, pred_tp, col = 'grey30')
 points3d(hum, temp, cnt_rapp, col = 'red', size = 5)
@@ -1066,3 +1069,29 @@ pi.conformal <- reg_split_normalized_conformal(we$temp, we$casual, we$temp, alph
 x.test <- data.frame("x"=we$temp)
 performance <- evaluate_predictions(x.test, we$casual, lower=pi.conformal$lower_bound, upper=pi.conformal$upper_bound, 2)
 
+####EWMA####
+install.packages("TTR")
+library(TTR)
+library(zoo)
+
+lambda <- 0.1
+ewma_values <- EMA(day$cnt, n = 1/lambda)
+ewma_values <- na.locf(ewma_values)
+matplot(ewma_values, type='l')
+
+df <- data.frame(Time = 1:731, Original = day$cnt, EWMA = ewma_values)
+library(ggplot2)
+
+# Grafico per confrontare serie originale ed EWMA
+ggplot(df, aes(x = Time)) +
+  geom_line(aes(y = Original, color = "Originale"), size = 1) +
+  geom_line(aes(y = EWMA, color = "EWMA"), size = 1.2) +
+  labs(title = "Serie temporale con EWMA",
+       y = "Valore", x = "Tempo") +
+  scale_color_manual(values = c("Originale" = "gray", "EWMA" = "blue"))
+
+
+diff_data <- diff(day$cnt)
+plot(diff_data)
+stl_result <- stl(ts(day$cnt, frequency = 365), s.window = "periodic")  
+plot(stl_result)
