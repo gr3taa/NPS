@@ -65,8 +65,7 @@ day <- day %>%
   left_join(hour_wide_sommato, by = "dteday")
 
 prop_casual <- day$casual/day$cnt
-plot(prop_casual, col=col_working, pch=16)
-shapiro.test(prop_casual[col_working=='blue'])
+
 
 ```
 
@@ -98,6 +97,9 @@ legend("topleft", legend = c("working day","weekend", "holiday"),fill=c("blue","
 col_weather <- rainbow(4)[day$weathersit]
 matplot(t(day[,17:40]), type='l', col=col_weather)
 
+plot(prop_casual, col=col_working, pch=16)
+shapiro.test(prop_casual[col_working=='blue'])
+
 ggplot(day, aes(x = as.factor(weathersit), y = cnt)) +
   geom_boxplot() +
   labs(title = "Rentals by Weather Situation", x = "Weather Situation", y = "Total Rentals")
@@ -115,6 +117,7 @@ n<-dim(day)[1]
 summary(fit)
 plot(anno, day$cnt, xlab='anno',col=rainbow(g),main='Original Data')
 T0 <- summary(fit)[[1]][1,4]  # extract the test statistic
+B<-1000
 T_stat <- numeric(B) 
 for(perm in 1:B){
   # Permutation:
@@ -201,7 +204,12 @@ p.value <- perm_t_test(x,y,iter=1e3) #0.093
 ## Interval wise test
 
 ```{r}
+library(fdatest)
+library(data.table)
+library(fda)
+library(roahd)
 fd<-fData(seq(0,23),(day[,17:40]))
+
 w1_fd=subset(fd, day$weathersit==1)
 plot(w1_fd)
 w2_fd=subset(fd, day$weathersit==2)
@@ -209,28 +217,28 @@ plot(w2_fd)
 w3_fd=subset(fd, day$weathersit==3)
 plot(w3_fd)
 
-library(fdatest)
 day_hour <- as.matrix(day[,17:40])
-weathersit <- day$weathersit
-ITP.result <- ITPaovbspline(day_hour ~ weathersit, B=1000,nknots=20,order=3,method="responses") 
+groups <- day$workingday
+ITP.result <- ITPaovbspline(day_hour ~ groups, B=1000,nknots=20,order=3,method="responses") #ITPlmbspline per la regressione
 summary(ITP.result)
-plot(ITP.result,plot.adjpval = TRUE, xrange=c(0,23))
+plot(ITP.result,plot.adjpval = TRUE, xrange=c(0,23), )
 ```
 
 ## Test anova in base a weathersit 
 
 ```{r}
-T0_workingday <- summary.aov(aov(cnt ~ workingday + weathersit))[[1]][1,4]
+
+T0_workingday <- summary.aov(aov(cnt_rapp ~ workingday + weathersit))[[1]][1,4]
 # residuals under H0:
 # cnt = mu + beta*weathersit
-aov.H0workingday <- aov(cnt ~ weathersit)
+aov.H0workingday <- aov(cnt_rapp ~ weathersit)
 residuals.H0workingday <- aov.H0workingday$residuals
 
 # Test for weathersit
-T0_weathersit <- summary.aov(aov(cnt ~ workingday + weathersit))[[1]][2,4]
+T0_weathersit <- summary.aov(aov(cnt_rapp ~ workingday + weathersit))[[1]][2,4]
 # residuals under H0:
 # cnt = mu + alpha*workingday
-aov.H0weathersit <- aov(cnt ~ workingday)
+aov.H0weathersit <- aov(cnt_rapp ~ workingday)
 residuals.H0weathersit <- aov.H0weathersit$residuals
 B <- 1000
 T_weathersit <- T_workingday <- numeric(B)
@@ -245,7 +253,7 @@ for(perm in 1:B){
   cnt.perm.H0weathersit <- aov.H0weathersit$fitted + residuals.H0weathersit[permutation]
   T_weathersit[perm] <- summary.aov(aov(cnt.perm.H0weathersit ~ workingday + weathersit))[[1]][2,4]
 }
-sum(T_workingday >= T0_workingday)/B#0.124
+sum(T_workingday >= T0_workingday)/B#0.144
 sum(T_weathersit >= T0_weathersit)/B#0
 
 ```
@@ -399,6 +407,8 @@ matlines(hum.grid ,se.bands ,lwd =1, col =" blue",lty =3)
 ```{r}
 library(mgcv)
 attach(day)
+grid=expand.grid(hum.grid,temp.grid)
+names(grid)=c('hum','temp')
 model_gam_tp = gam(cnt_rapp ~ s(hum, temp, bs="tp", m=2), # m for order
                    data = day)
 pred_tp = predict(model_gam_tp,
@@ -500,7 +510,7 @@ plot(x.grid, upper_b_b, type='l', col="black", lty=2, xlab="hour", ylab="cnt", l
 lines(x.grid, point_pred_b, type='l', col="forestgreen", lwd=1.5)
 lines(x.grid, lower_b_b, type='l', col="black", lty=2, lwd=1.5)
 
-
+par(mfrow=c(1,1))
 ```
 
 # seconda research question
@@ -603,11 +613,11 @@ day$cnt_rapp <- cnt_rapp
 ## ANOVA cnt causal-year-----------------------
 B<-1000
 yr<-as.factor(day$yr)
-fit <- aov(casual~yr)
+fit <- aov(day$casual~yr)
 g<-nlevels(yr)
 n<-dim(day)[1]
 summary(fit)
-plot(yr, casual, xlab='yr',col=rainbow(g),main='Original Data')
+plot(yr, day$casual, xlab='yr',col=rainbow(g),main='Original Data')
 T0 <- summary(fit)[[1]][1,4]  # extract the test statistic
 T_stat <- numeric(B) 
 for(perm in 1:B){
@@ -652,7 +662,7 @@ p_val#0
 par(mfrow=c(1,2))
 plot(yr, casual, xlab='yr',col=rainbow(g),main='Original Data')
 plot(yr, cnt_rapp, xlab='yr',col=rainbow(g),main='Original Data')
-
+par(mfrow=c(1,1))
 ```
 
 ## Test regressione 
@@ -730,7 +740,7 @@ fit2 <- summary(rq(day_casual~temp,tau=c(.05, .25, .5, .75, .95)))
 
 plot(fit2,mfrow = c(1,2))
 
-
+temp<-day$temp
 plot(temp,day_casual,cex=.25,type="n",xlab="Household temp", ylab="Food Expenditure")
 points(temp,day_casual,cex=.5,col="blue")
 abline(rq(day_casual~temp,tau=.5),col="blue") 
