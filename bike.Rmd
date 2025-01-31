@@ -328,7 +328,7 @@ detach(hour)
 ```{r}
 attach(day)
 n<- dim(day)[1]
-result<-lm(cnt ~ hum +temp + windspeed)
+result<-lm(cnt ~ hum +temp + windspeed+instant)
 summary(result)
 shapiro.test(result$residuals)$p
 qqnorm(result$residuals)
@@ -340,44 +340,52 @@ for(perm in 1:B){
   permutation <- sample(n)
   
   Y.perm.glob <- cnt[permutation]
-  T_H0glob[perm] <- summary(lm(Y.perm.glob ~ hum +temp + windspeed))$adj.r.squared
+  T_H0glob[perm] <- summary(lm(Y.perm.glob ~ hum +temp +instant+ windspeed))$adj.r.squared
 }
 sum(T_H0glob>=T0_glob)/B#0
 
 T0_x1 <- abs(summary(result)$adj.r.squared)
 T0_x2 <- abs(summary(result)$adj.r.squared)
 T0_x3 <- abs(summary(result)$adj.r.squared)
-
-regr.H01 <- lm(cnt~temp+windspeed)
+T0_x4<- abs(summary(result)$adj.r.squared)
+regr.H01 <- lm(cnt~temp+windspeed+instant)
 residuals.H01 <- regr.H01$residuals
 
-regr.H02 <- lm(cnt~hum+windspeed)
+regr.H02 <- lm(cnt~hum+windspeed+instant)
 residuals.H02 <- regr.H02$residuals
 
-regr.H03 <- lm(cnt~hum+temp)
+regr.H03 <- lm(cnt~hum+temp+instant)
 residuals.H03 <- regr.H03$residuals
 
-T_H01 <- T_H02 <- T_H03 <- numeric(B)
+regr.H04 <- lm(cnt~hum+temp+windspeed)
+residuals.H04 <- regr.H04$residuals
 
+T_H01 <- T_H02 <- T_H03 <- T_H04<- numeric(B)
+set.seed(202454)
 for(perm in 1:B){
   permutation <- sample(n)
   
   residuals.H01.perm <- residuals.H01[permutation]
   Y.perm.H01 <- regr.H01$fitted + residuals.H01.perm
-  T_H01[perm] <- abs(summary(lm(Y.perm.H01 ~ hum+temp+windspeed))$adj.r.squared)
+  T_H01[perm] <- abs(summary(lm(Y.perm.H01 ~ hum+temp+windspeed+instant))$adj.r.squared)
   
   residuals.H02.perm <- residuals.H02[permutation]
   Y.perm.H02 <- regr.H02$fitted + residuals.H02.perm
-  T_H02[perm] <- abs(summary(lm(Y.perm.H02 ~ hum+temp+windspeed))$adj.r.squared)
+  T_H02[perm] <- abs(summary(lm(Y.perm.H02 ~ hum+temp+windspeed+instant))$adj.r.squared)
   
   residuals.H03.perm <- residuals.H03[permutation]
   Y.perm.H03 <- regr.H03$fitted + residuals.H03.perm
-  T_H03[perm] <- abs(summary(lm(Y.perm.H03 ~ hum+temp+windspeed))$adj.r.squared)
+  T_H03[perm] <- abs(summary(lm(Y.perm.H03 ~ hum+temp+windspeed+instant))$adj.r.squared)
+  
+  residuals.H04.perm <- residuals.H04[permutation]
+  Y.perm.H04 <- regr.H04$fitted + residuals.H04.perm
+  T_H04[perm] <- abs(summary(lm(Y.perm.H04 ~ hum+temp+windspeed+instant))$adj.r.squared)
 }
 
-sum(T_H01>=T0_x1)/B#0.01
+sum(T_H01>=T0_x1)/B#0
 sum(T_H02>=T0_x2)/B#0
-sum(T_H03>=T0_x3)/B#0.06
+sum(T_H03>=T0_x3)/B#0.042
+sum(T_H04>=T0_x4)/B#0
 detach(day)
 ```
 
@@ -418,6 +426,163 @@ persp3d(hum.grid,temp.grid, pred_tp, col = 'grey30')
 points3d(hum, temp, cnt_rapp, col = 'red', size = 5)
 detach(day)
 ```
+
+## Modello gam e test confronto
+
+```{r}
+model_gam_inter=gam(cnt ~ instant + s(hum,bs='cr')+s(temp,bs='cr')+s(I(hum*temp),bs='cr'),data = day)
+summary(model_gam_inter)
+
+model_gam_reduced=gam(cnt ~ instant + s(hum,bs='cr')+s(temp,bs='cr'),data = day)
+summary(model_gam_reduced)
+
+model_gam_tp = gam(cnt ~ instant + s(hum, temp, bs="tp", m=2), # m for order
+                   data = day)
+
+temp.grid=(seq(range(day$temp)[1],range(day$temp)[2],by=0.01))
+hum.grid=(seq(range(day$hum)[1],range(day$hum)[2],by=0.01))
+ist.grid=(seq(range(day$instant)[1],range(day$instant)[2],by=1))
+grid=expand.grid(ist.grid,hum.grid,temp.grid)
+names(grid)=c('ist','hum','temp')
+pred_tp = predict(model_gam_reduced,
+                  newdata = (grid))
+open3d()
+persp3d(hum.grid,temp.grid, pred_tp, col = 'grey30')
+points3d(hum, temp, cnt, col = 'red', size = 5)
+
+hum.grid <- seq(min(day$hum), max(day$hum), length = 30)  # 30 punti tra min e max di hum
+temp.grid <- seq(min(day$temp), max(day$temp), length = 30)  # 30 punti tra min e max di temp
+
+# Creare una griglia combinando tutti i valori di hum e temp
+grid <- expand.grid(hum = hum.grid, temp = temp.grid, instant = 1)
+pred_tp <- predict(model_gam_reduced, newdata = grid)
+pred_tp_matrix <- matrix(pred_tp, nrow = length(hum.grid), ncol = length(temp.grid))
+open3d()
+persp3d(hum.grid, temp.grid, pred_tp_matrix, col = 'grey30', alpha = 0.7, 
+        xlab = "Humidity", ylab = "Temperature", zlab = "Bike Rentals")
+
+# Aggiungere i punti reali in rosso
+points3d(day$hum, day$temp, day$cnt, col = 'red', size = 5)
+predict(model_gam_reduced, newdata = data.frame(hum = 0.51, temp = 11/41,instant=739))
+predict(model_gam_inter, newdata = data.frame(hum = 0.51, temp = 11/41,instant=739))
+
+anova(model_gam_tp ,model_gam_inter, test = "F")
+shapiro.test(model_gam_tp$residuals)
+
+
+summary.aov(aov(cnt ~ instant + s(hum, temp, bs="tp", m=2), # m for order
+                data = day))
+attach(day)
+T0_station_fuel <-summary(cnt ~ instant + s(hum,bs='cr')+s(temp,bs='cr')+s(I(hum*temp),bs='cr') # m for order
+                                  )
+T0_station_fuel
+
+# permutation
+# the idea is to permute the residuals under H0:
+# km = mu + alpha*station + beta*fuel
+# additive model
+aov.H0station_fuel <- aov(km ~ station + fuel)
+aov.H0station_fuel
+residuals.H0station_fuel <- aov.H0station_fuel$residuals
+n <- 8
+permutation <- sample(1:n)
+residuals.H0station_fuel <- residuals.H0station_fuel[permutation]
+# permuted y values:
+km.perm.H0station_fuel <- aov.H0station_fuel$fitted + residuals.H0station_fuel
+summary.aov(aov(km.perm.H0station_fuel ~ station + fuel + station:fuel))
+# How data has changed?
+layout(rbind(1:2))
+plot(station_fuel, km, col=rainbow(5)[2:5], ylim=c(0,24),main='Original data')
+plot(station_fuel, km.perm.H0station_fuel, col=rainbow(5)[2:5], ylim=c(0,24),main='Permuted data')
+
+
+
+# Number of permutations
+n_permutations <- 1000
+
+# Placeholder to store permuted deviance differences
+permuted_diffs <- numeric(n_permutations)
+
+# Loop over permutations
+F_value<-numeric(n_permutations)
+for (i in 1:n_permutations) {
+  # Permute the response variable (or predictors)
+  permuted_data <- day
+  permuted_data$y <- sample(day$cnt)  # Shuffle the outcome variable
+  
+  # Fit the reduced and full models to the permuted data
+  model_gam_inter_perm=gam(y ~ instant + s(hum,bs='cr')+s(temp,bs='cr')+s(I(hum*temp),bs='cr'),data = permuted_data)
+
+  model_gam_reduced_perm=gam(y ~ instant + s(hum,bs='cr')+s(temp,bs='cr'),data = permuted_data)
+ 
+  # Calculate the deviance for both models
+  RSS_full_perm <- deviance(model_gam_inter_perm)
+  RSS_reduced_perm <- deviance(model_gam_reduced_perm)
+  df_full <- N-sum(summary(model_gam_inter_perm)$s.table[,2])-1 # -1 for the intercept
+  df_reduced <- N-sum(summary(model_gam_reduced_perm)$s.table[,2])-2 # -2 for the intercept and the linear contribution of education
+  df_difference <- df_reduced-df_full
+  F_value[i]<- ((RSS_full_perm-RSS_reduced_perm)/df_difference)/(RSS_full_perm/summary(model_gam_inter_perm)$residual.df)
+  
+  
+  # Calculate the deviance difference for this permutation
+  permuted_diffs[i] <- RSS_reduced_perm - RSS_full_perm
+}
+
+# Calculate the observed deviance difference
+RSS_full <- deviance(model_gam_inter)
+RSS_reduced <- deviance(model_gam_reduced)
+observed_diff <- RSS_reduced - RSS_full
+N<-731
+df_full <- N-sum(summary(model_gam_inter)$s.table[,2])-1 # -1 for the intercept
+df_reduced <- N-sum(summary(model_gam_reduced)$s.table[,2])-2 # -2 for the intercept and the linear contribution of education
+df_difference <- df_reduced-df_full
+F_value_manual <- ((RSS_reduced-RSS_full)/df_difference)/(RSS_full/summary(model_gam_inter)$residual.df)
+# Compute p-value by comparing observed difference with permuted distribution
+p_value_permutation <- mean(F_value >= F_value_manual)
+print(p_value_permutation)#0.425
+
+permuted_diffs <- numeric(n_permutations)
+
+# Loop over permutations
+F_value<-numeric(n_permutations)
+for (i in 1:n_permutations) {
+  # Permute the response variable (or predictors)
+  permuted_data <- day
+  permuted_data$y <- sample(day$cnt)  # Shuffle the outcome variable
+  
+  # Fit the reduced and full models to the permuted data
+  model_gam_inter_perm=gam(y ~ instant + s(hum, temp, bs="tp", m=2), # m for order
+                           data = permuted_data)
+  model_gam_reduced_perm=gam(y ~ instant + s(hum,bs='cr')+s(temp,bs='cr'),data = permuted_data)
+  
+  # Calculate the deviance for both models
+  RSS_full_perm <- deviance(model_gam_inter_perm)
+  RSS_reduced_perm <- deviance(model_gam_reduced_perm)
+  df_full <- N-sum(summary(model_gam_inter_perm)$s.table[,2])-1 # -1 for the intercept
+  df_reduced <- N-sum(summary(model_gam_reduced_perm)$s.table[,2])-2 # -2 for the intercept and the linear contribution of education
+  df_difference <- df_reduced-df_full
+  F_value[i]<- ((RSS_full_perm-RSS_reduced_perm)/df_difference)/(RSS_full_perm/summary(model_gam_inter_perm)$residual.df)
+  
+  
+  # Calculate the deviance difference for this permutation
+  permuted_diffs[i] <- RSS_reduced_perm - RSS_full_perm
+}
+
+# Calculate the observed deviance difference
+RSS_full <- deviance(model_gam_tp)
+RSS_reduced <- deviance(model_gam_reduced)
+observed_diff <- RSS_reduced - RSS_full
+N<-731
+df_full <- N-sum(summary(model_gam_tp)$s.table[,2])-1 # -1 for the intercept
+df_reduced <- N-sum(summary(model_gam_reduced)$s.table[,2])-2 # -2 for the intercept and the linear contribution of education
+df_difference <- df_reduced-df_full
+F_value_manual <- ((RSS_reduced-RSS_full)/df_difference)/(RSS_full/summary(model_gam_tp)$residual.df)
+# Compute p-value by comparing observed difference with permuted distribution
+p_value_permutation <- mean(F_value >= F_value_manual)
+print(p_value_permutation)#0.425
+
+```
+
 
 ## Conformal prediction 
 
