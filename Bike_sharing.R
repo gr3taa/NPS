@@ -1095,3 +1095,27 @@ diff_data <- diff(day$cnt)
 plot(diff_data)
 stl_result <- stl(ts(day$cnt, frequency = 365), s.window = "periodic")  
 plot(stl_result)
+
+
+#### trend/stagionalità ####
+nbasis <- 10 # Numero di funzioni di base (più alto = più dettagli, meno liscio)
+bspline_basis <- create.bspline.basis(rangeval = c(1,731), nbasis = nbasis)
+
+# 3. Effettuiamo lo smoothing con la penalizzazione lambda
+lambda <- 1  # Parametro di smoothing (da calibrare)
+fdParobj <- fdPar(bspline_basis, lambda = lambda)
+smoothed_fd <- smooth.basis(1:731, day$cnt, fdParobj)$fd
+func <- eval.fd(1:731, smoothed_fd)
+
+# 4. Visualizziamo il risultato
+plot(1:731, day$cnt, pch = 16, col = "gray", main = "Smoothing con Basi di Fourier",
+     xlab = "Tempo", ylab = "Valore")
+lines(1:731, func, col = "blue", lwd = 2)  # Curva smussata
+legend("topright", legend = c("Dati", "Smoothing"),
+       col = c("gray", "blue"), lty = c(NA, 1, 2), pch = c(16, NA, NA))
+stl_result <- stl(ts(func[,1], frequency = 365), s.window = "periodic")  
+plot(stl_result)
+
+
+
+
