@@ -65,8 +65,10 @@ day <- day %>%
   left_join(hour_wide_sommato, by = "dteday")
 
 prop_casual <- day$casual/day$cnt
-
-
+library(knitr)
+library(kableExtra)
+kable(head(day[,1:16]), caption = "Prime righe del dataset day") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F)
 ```
 
 
