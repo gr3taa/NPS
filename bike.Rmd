@@ -36,6 +36,12 @@ background-color: lightblue;
 }
 ```
 
+# Libraries
+
+```{r}
+
+```
+
 
 # Dataset 
 
@@ -75,7 +81,7 @@ kable(head(day[,1:16]), caption = "Prime righe del dataset day") %>%
 # Grafici iniziali
 
 ```{r}
-matplot(t(day[,17:40]), type='l')
+matplot(t(day[,17:40]), type='l',ylab="users", xlab="hour", main="Rentals by hour")
 
 mese_anno <- paste(day$yr, day$mnth, sep = "_")
 rle <- rle(mese_anno)
@@ -105,6 +111,16 @@ shapiro.test(prop_casual[col_working=='blue'])
 ggplot(day, aes(x = as.factor(weathersit), y = cnt)) +
   geom_boxplot() +
   labs(title = "Rentals by Weather Situation", x = "Weather Situation", y = "Total Rentals")
+
+meteo<-day[,10:16]
+meteo<-cbind(meteo,day[,16])
+library(corrplot)
+cor_meteo<-cor(meteo)
+corrplot(cor_meteo, method = "number")
+
+col_anno<-ifelse(day$yr==0, 'green', 'red')
+matplot(t(day[,17:40]), type='l', col=col_anno,xlab="hour", ylab="users")
+legend("topleft", legend=c("2011","2012"), col=c("red","blue"), lty=1, lwd=2, cex=0.75)
 
 ```
 
@@ -328,9 +344,9 @@ detach(hour)
 ## Test regressione “day” covariata
 
 ```{r}
-attach(day)
-n<- dim(day)[1]
-result<-lm(cnt ~ hum +temp + windspeed+instant)
+attach(day2)
+n<- dim(day2)[1]
+result<-lm(registered ~ hum +temp + windspeed+instant)
 summary(result)
 shapiro.test(result$residuals)$p
 qqnorm(result$residuals)
@@ -341,7 +357,7 @@ T_H0glob <- numeric(B)
 for(perm in 1:B){
   permutation <- sample(n)
   
-  Y.perm.glob <- cnt[permutation]
+  Y.perm.glob <- registered[permutation]
   T_H0glob[perm] <- summary(lm(Y.perm.glob ~ hum +temp +instant+ windspeed))$adj.r.squared
 }
 sum(T_H0glob>=T0_glob)/B#0
@@ -350,16 +366,16 @@ T0_x1 <- abs(summary(result)$adj.r.squared)
 T0_x2 <- abs(summary(result)$adj.r.squared)
 T0_x3 <- abs(summary(result)$adj.r.squared)
 T0_x4<- abs(summary(result)$adj.r.squared)
-regr.H01 <- lm(cnt~temp+windspeed+instant)
+regr.H01 <- lm(registered~temp+windspeed+instant)
 residuals.H01 <- regr.H01$residuals
 
-regr.H02 <- lm(cnt~hum+windspeed+instant)
+regr.H02 <- lm(registered~hum+windspeed+instant)
 residuals.H02 <- regr.H02$residuals
 
-regr.H03 <- lm(cnt~hum+temp+instant)
+regr.H03 <- lm(registered~hum+temp+instant)
 residuals.H03 <- regr.H03$residuals
 
-regr.H04 <- lm(cnt~hum+temp+windspeed)
+regr.H04 <- lm(registered~hum+temp+windspeed)
 residuals.H04 <- regr.H04$residuals
 
 T_H01 <- T_H02 <- T_H03 <- T_H04<- numeric(B)
@@ -384,12 +400,37 @@ for(perm in 1:B){
   T_H04[perm] <- abs(summary(lm(Y.perm.H04 ~ hum+temp+windspeed+instant))$adj.r.squared)
 }
 
-sum(T_H01>=T0_x1)/B#0
+sum(T_H01>=T0_x1)/B#0.008
 sum(T_H02>=T0_x2)/B#0
-sum(T_H03>=T0_x3)/B#0.042
+sum(T_H03>=T0_x3)/B#0.127
 sum(T_H04>=T0_x4)/B#0
-detach(day)
+detach(day2)
 ```
+
+## trend
+```{r}
+####trend ####
+nbasis <- 10 # Numero di funzioni di base (più alto = più dettagli, meno liscio)
+bspline_basis <- create.bspline.basis(rangeval = c(1,731), nbasis = nbasis)
+
+# 3. Effettuiamo lo smoothing con la penalizzazione lambda
+lambda <- 1  # Parametro di smoothing (da calibrare)
+fdParobj <- fdPar(bspline_basis, lambda = lambda)
+smoothed_fd <- smooth.basis(1:731, day2$registered, fdParobj)$fd
+func <- eval.fd(1:731, smoothed_fd)
+
+# 4. Visualizziamo il risultato
+plot(1:731, day$registered, pch = 16, col = "gray", main = "Smoothing con Basi di Fourier",
+     xlab = "Tempo", ylab = "Valore")
+lines(1:731, func, col = "blue", lwd = 2)  # Curva smussata
+legend("topright", legend = c("Dati", "Smoothing"),
+       col = c("gray", "blue"), lty = c(NA, 1, 2), pch = c(16, NA, NA))
+stl_result <- stl(ts(func[,1], frequency = 364), s.window = "periodic")  
+plot(stl_result)
+
+```
+
+
 
 ## Regressione seperata per le due variabili
 
@@ -411,6 +452,55 @@ lines(hum.grid,preds$fit ,lwd =2, col =" blue")
 matlines(hum.grid ,se.bands ,lwd =1, col =" blue",lty =3)
 
 ```
+
+```{r}
+temp.grid <- seq(range(day$temp)[1], range(day$temp)[2], by = 0.5)
+hum.grid  <- seq(range(day$hum)[1], range(day$hum)[2], by = 0.5)
+inst.grid <- mean(day$instant)  # Usiamo un valore medio per 'instant'
+
+vis.gam(model_gam_reduced, 
+        view = c("temp", "hum"), 
+        plot.type = "persp", 
+        color = "terrain", 
+        theta = 30, 
+        phi = 30, 
+        ticktype = "detailed", 
+        plot.points = TRUE)
+
+
+# Griglia dei dati
+grid <- expand.grid(instant = inst.grid, hum = hum.grid, temp = temp.grid)
+
+
+# Previsione
+pred_tp <- predict(model_gam_reduced, newdata = grid)
+
+# Conversione in matrice per il grafico 3D
+z_matrix <- matrix(pred_tp, nrow = length(hum.grid), ncol = length(temp.grid))
+open3d()
+persp3d(x = temp.grid, y = hum.grid, z = z_matrix, col = "lightblue",
+        xlab = "Temperature", ylab = "Humidity", zlab = "Predicted Rentals",
+        theta = 40, phi = 20, expand = 0.8)
+
+plot_ly(
+  x = temp.grid,
+  y = hum.grid,
+  z = z_matrix,
+  type = "surface"
+) %>%
+  layout(
+    title = "3D Surface Plot of Bike Rentals",
+    scene = list(
+      xaxis = list(title = "Temperature"),
+      yaxis = list(title = "Humidity"),
+      zaxis = list(title = "Predicted Rentals")
+    )
+  )
+
+
+```
+
+
 
 ## modello thin plate spline
 
@@ -444,13 +534,15 @@ model_gam_tp = gam(cnt ~ instant + s(hum, temp, bs="tp", m=2), # m for order
 temp.grid=(seq(range(day$temp)[1],range(day$temp)[2],by=0.01))
 hum.grid=(seq(range(day$hum)[1],range(day$hum)[2],by=0.01))
 ist.grid=(seq(range(day$instant)[1],range(day$instant)[2],by=1))
-grid=expand.grid(ist.grid,hum.grid,temp.grid)
-names(grid)=c('ist','hum','temp')
+grid=expand.grid(instant = ist.grid, hum = hum.grid, temp = temp.grid)
+grid=as.data.frame(grid)
 pred_tp = predict(model_gam_reduced,
-                  newdata = (grid))
+                  newdata = grid)
+z_matrix <- matrix(pred_tp, nrow = length(hum.grid), ncol = length(temp.grid))
+
 open3d()
 persp3d(hum.grid,temp.grid, pred_tp, col = 'grey30')
-points3d(hum, temp, cnt, col = 'red', size = 5)
+points3d(day$hum, day$temp, day$cnt, col = 'red', size = 5)
 
 hum.grid <- seq(min(day$hum), max(day$hum), length = 30)  # 30 punti tra min e max di hum
 temp.grid <- seq(min(day$temp), max(day$temp), length = 30)  # 30 punti tra min e max di temp
@@ -666,14 +758,14 @@ point_pred_b <- band$pred[[1]][[1]]
 
 par(mfrow=c(1,2))
 plot(x.grid, upper_b_a, type='l', col="black", lty=2, xlab="hour", ylab="cnt", lwd=1.5,
-     ylim=c(-200,1100),
-     main="Functional CP band working day 2012")
+     ylim=c(min(lower_b_b),max(upper_b_a)),
+     main="Functional CP band working day")
 lines(x.grid, point_pred_a, type='l', col="darkorange", lwd=1.5)
 lines(x.grid, lower_b_a, type='l', col="black", lty=2, lwd=1.5)
 
 plot(x.grid, upper_b_b, type='l', col="black", lty=2, xlab="hour", ylab="cnt", lwd=1.5,
-     ylim=c(-200,1100),
-     main="Functional CP band weekend 2012")
+     ylim=c(min(lower_b_b),max(upper_b_a)),
+     main="Functional CP band weekend")
 lines(x.grid, point_pred_b, type='l', col="forestgreen", lwd=1.5)
 lines(x.grid, lower_b_b, type='l', col="black", lty=2, lwd=1.5)
 
@@ -757,6 +849,10 @@ abline(v=T20,col=3,lwd=4)
 p_val = sum(T2>=T20)/B
 p_val#0
 
+
+matplot(seq(0,23),colMeans(t2), type='l', col='red', lty=1, xlab='hour', ylab='cnt')
+lines(seq(0,23),colMeans(t1), col='blue', lty=1)
+legend("topleft", legend=c("registered", "casual"), col=c("red", "blue"), lty=1)
 ```
 
 ## standardizzazione
@@ -837,7 +933,7 @@ par(mfrow=c(1,1))
 ```{r}
 attach(day)
 n<- dim(day)[1]
-result<-lm(day_casual ~ hum +temp + windspeed)
+result<-lm(casual ~ hum +temp + windspeed+instant,data=day)
 summary(result)
 shapiro.test(result$residuals)$p
 qqnorm(result$residuals)
@@ -849,23 +945,27 @@ T_H0glob <- numeric(B)
 for(perm in 1:B){
   permutation <- sample(n)
   
-  Y.perm.glob <- day_casual[permutation]
-  T_H0glob[perm] <- summary(lm(Y.perm.glob ~ hum +temp + windspeed))$adj.r.squared
+  Y.perm.glob <- casual[permutation]
+  T_H0glob[perm] <- summary(lm(Y.perm.glob ~ hum +temp + windspeed+instant))$adj.r.squared
 }
 sum(T_H0glob>=T0_glob)/B#0
 
 T0_x1 <- abs(summary(result)$adj.r.squared)
 T0_x2 <- abs(summary(result)$adj.r.squared)
 T0_x3 <- abs(summary(result)$adj.r.squared)
+T0_x4 <- abs(summary(result)$adj.r.squared)
 
-regr.H01 <- lm(day_casual~temp+windspeed)
+regr.H01 <- lm(casual~temp+windspeed+instant)
 residuals.H01 <- regr.H01$residuals
 
-regr.H02 <- lm(day_casual~hum+windspeed)
+regr.H02 <- lm(casual~hum+windspeed+instant)
 residuals.H02 <- regr.H02$residuals
 
-regr.H03 <- lm(day_casual~hum+temp)
+regr.H03 <- lm(casual~hum+temp+instant)
 residuals.H03 <- regr.H03$residuals
+
+regr.H04 <- lm(casual~hum+temp+weathersit)
+residuals.H04 <- regr.H04$residuals
 
 T_H01 <- T_H02 <- T_H03 <- numeric(B)
 
@@ -874,20 +974,25 @@ for(perm in 1:B){
   
   residuals.H01.perm <- residuals.H01[permutation]
   Y.perm.H01 <- regr.H01$fitted + residuals.H01.perm
-  T_H01[perm] <- abs(summary(lm(Y.perm.H01 ~ hum+temp+windspeed))$adj.r.squared)
+  T_H01[perm] <- abs(summary(lm(Y.perm.H01 ~ hum+temp+windspeed+instant))$adj.r.squared)
   
   residuals.H02.perm <- residuals.H02[permutation]
   Y.perm.H02 <- regr.H02$fitted + residuals.H02.perm
-  T_H02[perm] <- abs(summary(lm(Y.perm.H02 ~ hum+temp+windspeed))$adj.r.squared)
+  T_H02[perm] <- abs(summary(lm(Y.perm.H02 ~ hum+temp+windspeed+instant))$adj.r.squared)
   
   residuals.H03.perm <- residuals.H03[permutation]
   Y.perm.H03 <- regr.H03$fitted + residuals.H03.perm
-  T_H03[perm] <- abs(summary(lm(Y.perm.H03 ~ hum+temp+windspeed))$adj.r.squared)
+  T_H03[perm] <- abs(summary(lm(Y.perm.H03 ~ hum+temp+windspeed+instant))$adj.r.squared)
+  
+  residuals.H04.perm <- residuals.H04[permutation]
+  Y.perm.H04 <- regr.H04$fitted + residuals.H04.perm
+  T_H04[perm] <- abs(summary(lm(Y.perm.H04 ~ hum+temp+windspeed+instant))$adj.r.squared)
 }
 
-sum(T_H01>=T0_x1)/B#0.114 0.129
+sum(T_H01>=T0_x1)/B#0.146
 sum(T_H02>=T0_x2)/B#0
-sum(T_H03>=T0_x3)/B#0.307 0.311
+sum(T_H03>=T0_x3)/B#0.357 
+sum(T_H04>=T0_x4)/B#0.031
 detach(day)
 ```
 
@@ -895,28 +1000,205 @@ detach(day)
 
 ```{r}
 library(quantreg)
-with(day, plot(temp ,day_casual ,xlim=range(temp.grid) ,cex =.5, col =" darkgrey ",xlab="temperature", ylab="users"))
-X <- model.matrix(day_casual ~ bs(temp, df=15),data=day)
+temp.grid <- seq(range(day$temp)[1], range(day$temp)[2], by = 0.5)
+with(day, plot(temp ,casual ,xlim=range(temp.grid) ,cex =.5, col =" darkgrey ",xlab="temperature", ylab="users"))
+X <- model.matrix(casual ~ instant + bs(temp, df=15),data=day)
 for(tau in (1:3)/4){
-  fit <- rq(day_casual ~ bs(temp, df=15), tau=0.95, data=day)
+  fit <- rq(casual ~ instant + bs(temp, df=15), tau=0.95, data=day)
   accel.fit <- X %*% fit$coef
   with(day,lines(temp,accel.fit))
 }
 
-fit2 <- summary(rq(day_casual~temp,tau=c(.05, .25, .5, .75, .95)))
+fit2 <- summary(rq(casual~temp,tau=c(.05, .25, .5, .75, .95),data=day))
 
 plot(fit2,mfrow = c(1,2))
 
-temp<-day$temp
-plot(temp,day_casual,cex=.25,type="n",xlab="Household temp", ylab="Food Expenditure")
-points(temp,day_casual,cex=.5,col="blue")
-abline(rq(day_casual~temp,tau=.5),col="blue") 
-abline(lm(day_casual~temp),lty=2,col="red") #the dreaded ols line
+temp<-day2$temp
+plot(temp,day2$casual,cex=.25,type="n",xlab="Temperature", ylab="Rentals")
+points(temp,day2$casual,cex=.5,col="blue")
+abline(rq(day2$casual~temp,tau=.5),col="blue") 
+abline(lm(day2$casual~temp+instant),lty=2,col="red") #the dreaded ols line
 taus <- c(.05,.1,.25,.75,.90,.95)
 
 for( i in 1:length(taus)){
-  abline(rq(day_casual~temp,tau=taus[i]),col="gray")
+  abline(rq(day2$casual~temp+instant,tau=taus[i]),col="gray")
 }
 
+```
+
+
+```{r}
+library(quantreg)
+# Esegui la quantile regression per il 10° percentile (bassa domanda)
+model_low <- rq(casual ~ temp , data = day2, tau = 0.10)
+
+# Esegui la quantile regression per il 90° percentile (alta domanda)
+model_high <- rq(casual ~ temp , data = day2, tau = 0.90)
+
+# Riepilogo del modello per la bassa domanda (10° percentile)
+summary(model_low)
+
+# Riepilogo del modello per l'alta domanda (90° percentile)
+summary(model_high)
+
+# Previsione per il 10° percentile (bassa domanda)
+pred_low <- predict(model_low, newdata = data.frame(temp = c(0.2,0.5)))
+
+# Previsione per il 90° percentile (alta domanda)
+pred_high <- predict(model_high, newdata = data.frame(temp = c(0.2, 0.55)))
+
+# Predizioni su una griglia di valori di temperatura e umidità
+temp_values <- seq(min(day2$temp), max(day2$temp), by=0.01)
+
+
+# Previsioni per il 10° e 90° percentile
+predictions_low <- predict(model_low, newdata = data.frame(temp=temp_values))
+predictions_high <- predict(model_high, newdata =data.frame(temp=temp_values))
+
+plot(day2$temp, day2$casual, col = "black",  xlab = "Temperatura", ylab = "Domanda")
+lines(temp_values, predictions_low, col = "red", lwd = 2)
+lines(temp_values, predictions_high, col = "green", lwd = 2)
+legend("topleft", legend = c("Dati", "10° Percentile", "90° Percentile"),
+       col = c("black", "red", "green"), lty = 1, lwd = 2)
+# Creazione di un grafico
+library(ggplot2)
+ggplot(grid, aes(x = temp, y = hum)) +
+  geom_tile(aes(fill = predictions_low), alpha = 0.5) +
+  geom_tile(aes(fill = predictions_high), alpha = 0.5) +
+  scale_fill_gradient(low = "blue", high = "red") +
+  labs(title = "Previsione della Domanda - Quantile Regression",
+       x = "Temperatura (°C)", y = "Umidità (%)",
+       fill = "Domanda")
+
+# Previsione della domanda per il 10° percentile (bassa domanda)
+ggplot(grid, aes(x = temp, y = casual)) +
+  geom_tile(aes(fill = predictions_low), alpha = 0.7) +
+  scale_fill_gradient(low = "blue", high = "red") +
+  labs(title = "Previsione della Domanda - 10° Percentile (Bassa Domanda)",
+       x = "Temperatura (°C)", y = "Umidità (%)",
+       fill = "Domanda")
+
+# Previsione della domanda per il 90° percentile (alta domanda)
+ggplot(grid, aes(x = temp, y = hum)) +
+  geom_tile(aes(fill = predictions_high), alpha = 0.7) +
+  scale_fill_gradient(low = "blue", high = "red") +
+  labs(title = "Previsione della Domanda - 90° Percentile (Alta Domanda)",
+       x = "Temperatura (°C)", y = "Umidità (%)",
+       fill = "Domanda")
+
+# Creazione del grafico a contorno per il 10° percentile (bassa domanda)
+library(ggplot2)
+
+ggplot(grid, aes(x = temp, y = hum)) +
+  geom_contour(aes(z = predictions_low, color = ..level..), size = 1) +
+  scale_color_gradient(low = "blue", high = "red") +   # Colori dalla bassa alla alta domanda
+  labs(title = "Domanda in Periodi di Bassa Richiesta (10° Percentile)",
+       x = "Temperatura (°C)", y = "Umidità (%)",
+       color = "Domanda") +
+  theme_minimal()
+
+# Heatmap per il 10° percentile (bassa domanda)
+ggplot(grid, aes(x = temp, y = hum)) +
+  geom_tile(aes(fill = predictions_low)) +            # Mappa di colore per la bassa domanda
+  scale_fill_gradient(low = "blue", high = "red") +   # Colori dal blu (bassa) al rosso (alta)
+  labs(title = "Domanda in Periodi di Bassa Richiesta (10° Percentile)",
+       x = "Temperatura (°C)", y = "Umidità (%)",
+       fill = "Domanda") +
+  theme_minimal()
+
+# Heatmap per il 90° percentile (alta domanda)
+ggplot(grid, aes(x = temp, y = hum)) +
+  geom_tile(aes(fill = predictions_high)) +           # Mappa di colore per l'alta domanda
+  scale_fill_gradient(low = "blue", high = "red") +   # Colori dal blu (bassa) al rosso (alta)
+  labs(title = "Domanda in Periodi di Alta Richiesta (90° Percentile)",
+       x = "Temperatura (°C)", y = "Umidità (%)",
+       fill = "Domanda") +
+  theme_minimal()
+
+fit1 <- rq(casual~temp+hum,tau=0.9,data=day2)
+fit0 <- rq(casual~temp,tau=0.9,data=day2)
+fit<- rq(casual~1,tau=0.9,data=day2)
+shapiro.test(fit$residuals)
+anova(fit0,fit,test="rank", score="wilcoxon")
+attach(day2)
+
+rq.alltau <- rq(casual~temp, tau=-1, data=day2)
+ranks.h0 <- ranks(rq.alltau)
+
+X1 <- model.matrix(fit1)
+X0 <- model.matrix(fit0)
+# obtain test statistic and parameters of distribution under the null
+rank.test.params <- rq.test.rank(x0=X0,x1=(X1[,-1])[,-2], y=casual, v=rq.alltau, score="wilcoxon")
+#trace(rq.test.rank, edit=T) 
+
+# test statistic
+rank.test.params$Tn
+#degrees of freedom of chi-square distirb under the null
+rank.test.params$ndf 
+# noncentrality parameter of chi-square distirb under the null
+rank.test.params$ncp  
+# evaluate it wiht Monte Carlo (no need, of course)
+grid <- seq(0,5, length.out=50)
+plot(grid, sapply(grid, FUN=dchisq, df=as.numeric(rank.test.params$ndf), ncp=0), type="l", main="Approximate Distribution under H0")
+
+# in a MC way
+B <- 1e3
+h0.monte.carlo <- rchisq(B,
+                         df=as.numeric(rank.test.params$ndf), 
+                         ncp=0
+                  )
+# p value
+sum(as.numeric(rank.test.params$Tn) <= h0.monte.carlo)/B
+
+plot(temp,casual,xlab = "milliseconds", ylab = "acceleration",type="n")
+points(temp,casual,cex = .75)
+library(splines)
+X <- model.matrix(casual ~ bs(temp, df=5))
+for(tau in c(0.1,0.9)){
+ fit <- rq(casual ~ bs(temp, df=5), tau=tau, data=day2)
+ accel.fit <- X %*% fit$coef
+ lines(temp,accel.fit)
+}
+
+```
+
+
+#causual stagioni
+
+```{r}
+col_season<-ifelse(day$season==1,"red",ifelse(day$season==2,"blue",ifelse(day$season==3,"green","black")))
+col_weekend<-ifelse(day$workingday==1,"red","blue")
+plot(day$temp,day$casual, col=col_weekend, xlab="casual", ylab="season")
+legend("topleft", legend=c("workingday","weekend"), col=c("red","blue"), pch=1)
+legend("topleft", legend=c( "winter","spring", "summer", "fall"), col=c("red", "blue", "green", "yellow"), pch=1)
+
+day_work<-subset(day,day$workingday==1)
+day_we<-subset(day,day$workingday==0)
+
+fit_l<-lm(casual~temp,data=day2)
+plot(day2$temp,fit_l$residuals,col=col_weekend)
+abline(h=0,col='black')
+shapiro.test(fit$residuals)
+
+fit_l_work<-lm(casual~temp,data=day_work)
+plot(day_work$temp,fit_l_work$residuals)
+abline(h=0,col='black')
+shapiro.test(fit$residuals)
+
+fit_l_we<-lm(casual~temp,data=day_we)
+plot(day_we$temp,fit_l_we$residuals)
+abline(h=0,col='black')
+shapiro.test(fit$residuals)
+
+par(mfrow=c(1,2))
+plot(day_work$temp,fit_l_work$residuals)
+plot(day_we$temp,fit_l_we$residuals)
+
+col_season_we<-ifelse(day_we$season==1,"red",ifelse(day_we$season==2,"blue",ifelse(day_we$season==3,"green","black")))
+col_weather_we<-ifelse(day_we$weathersit==1,"red",ifelse(day_we$weathersit==2,"blue",ifelse(day_we$weathersit==3,"green","black")))
+col_anno_we<-ifelse(day_we$yr==0,"red","blue")
+plot(day_we$temp,day_we$casual, col=col_anno_we, xlab="casual", ylab="season")
+legend("topleft", legend=c( "winter","spring", "summer", "fall"), col=c("red", "blue", "green", "black"), pch=1)
+subset(day_we,day_we$season==4)
 ```
 

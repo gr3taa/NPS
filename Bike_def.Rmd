@@ -1,0 +1,492 @@
+---
+title: "Bike"
+author: "Dello Russo, Deviardi, Gorbani"
+date: "2025-02-11"
+output:
+  
+  html_document: 
+    df_print: paged
+    toc: true
+  pdf_document: default
+  html_notebook: 
+    df_print: paged
+  word_document: default
+editor_options: 
+  chunk_output_type: console
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+library(rgl)
+knitr::opts_chunk$set(
+  echo = TRUE,        # Mostra il codice
+  results = "hide"   # Nasconde i grafici
+)
+knitr::knit_hooks$set(webgl = hook_webgl)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+ggplot2::theme_set(ggplot2::theme_bw())
+```
+
+
+```{css, echo=FALSE}
+.extracode {
+background-color: lightblue;
+}
+```
+
+# Libraries
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(kableExtra)
+library(corrplot)
+library(fdatest)
+library(data.table)
+library(roahd)
+library(mgcv)
+library(ggplot2)
+library(knitr)
+library(broom)
+library(tidyr)
+library(progress)
+library(pbapply)
+library(dbscan)
+library(gridExtra)
+library(fda)
+library(roahd)
+library(conformalInference.fd)
+library(quantreg)
+library(splines)
+library(rgl)
+
+```
+
+# Dataset
+
+```{r}
+day <- read.csv("Dataset/day.csv")
+hour <- read.csv("Dataset/hour.csv")
+
+# checking the number of observations in each day
+blocchi <- rle(hour$dteday)
+blocchi$values   
+blocchi$lengths
+
+# creating the variables of cnt_hour_registered in the day dataset
+hour_wide_register <- hour %>%
+  pivot_wider(
+    names_from = hr, 
+    values_from = registered,
+    names_prefix = "cnt_hour_"
+  )
+hour_wide_sommato_reg <- hour_wide_register %>%
+  group_by(dteday) %>%
+  summarise(across(starts_with("cnt_hour_"), sum, na.rm = TRUE))
+day2<- day %>%
+  left_join(hour_wide_sommato_reg, by = "dteday")
+
+hour_wide_casual <- hour %>%
+  pivot_wider(
+    names_from = hr, 
+    values_from = casual,
+    names_prefix = "cnt_hour_"
+  )
+hour_wide_sommato_cas <- hour_wide_casual %>%
+  group_by(dteday) %>%
+  summarise(across(starts_with("cnt_hour_"), sum, na.rm = TRUE))
+day1 <- day %>%
+  left_join(hour_wide_sommato_cas, by = "dteday")
+
+#Trasforma `dati_orari` per avere una colonna per ogni ora
+hour_wide <- hour %>%
+  pivot_wider(
+    names_from = hr, 
+    values_from = cnt,
+    names_prefix = "cnt_hour_"
+  )
+hour_wide_sommato <- hour_wide %>%
+  group_by(dteday) %>%
+  summarise(across(starts_with("cnt_hour"), sum, na.rm = TRUE))
+day <- day %>%
+  left_join(hour_wide_sommato, by = "dteday")
+
+kable(head(day[,1:16]), caption = "Prime righe del dataset day") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F)
+
+```
+
+# Exploratory Data Analysis
+
+```{r}
+# Outliers--------
+ind_outlier<-which(blocchi$lengths==1)
+day[ind_outlier,] # 2012-10-29: Hurricane Sandy
+day<-day[-ind_outlier,]
+day1<-day1[-ind_outlier,]
+day2<-day2[-ind_outlier,]
+
+# Graph---------
+# Hourly rentals
+matplot(t(day[, 17:40]), 
+        type = 'l', 
+        col = ifelse(day$workingday == 1, 'blue', 
+                     ifelse(day$holiday == 1, 'red', 'green')),xlab="hour", ylab="users")
+legend("topleft", legend=c("working day","weekend", "holiday"), col=c("blue","green","red"), lty=1, lwd=2, cex=0.75)
+# Daily rentals
+plot(day$instant,day$cnt,xlab="day",ylab="user")
+# Rentals by weather situation
+ggplot(day, aes(x = as.factor(weathersit), y = cnt)) +
+  geom_boxplot() +
+  labs(title = "Rentals by Weather Situation", x = "Weather Situation", y = "Total Rentals")
+# Corrplot
+meteo<-day[,10:16]
+cor_meteo<-cor(meteo)
+corrplot(cor_meteo, method = "number")
+# Register and casual
+plot(seq(0,23),colMeans(day2[,17:40]),type="l",xlab="hour",ylab="cnt",col='red')
+lines(seq(0,23),colMeans(day1[,17:40]),col='blue')
+legend("topleft", legend=c("registered","casual"), col=c("red","blue"), lty=1, lwd=2, cex=0.75)
+
+```
+# Registered
+
+## Hour usage
+
+### Permutational test working day - weekend distribution
+
+```{r}
+a<-subset(day2,day2$workingday==1)
+matplot(t(a[,17:40]), type='l')
+b<-subset(day2,day2$workingday==0)
+matplot(t(b[,17:40]), type='l')
+x<- a$cnt
+y<-b$cnt
+perm_t_test=function(x,y,iter=1e3){
+  T0=abs(mean(x)-mean(y))  # define the test statistic
+  T_stat=numeric(iter) # a vector to store the values of each iteration
+  x_pooled=c(x,y) # pooled sample
+  n=length(x_pooled)
+  n1=length(x)
+  print(sprintf("Using %s iterations to estimate the permutational distribution. There are actually %s possible permutations", iter, factorial(n)))
+  for(perm in 1:iter){ # loop for conditional MC
+    # permutation:
+    permutation <- sample(1:n)
+    x_perm <- x_pooled[permutation]
+    x1_perm <- x_perm[1:n1]
+    x2_perm <- x_perm[(n1+1):n]
+    # test statistic:
+    T_stat[perm] <- abs(mean(x1_perm) - mean(x2_perm))
+  }
+  # p-value
+  p_val <- sum(T_stat>=T0)/iter
+  return(p_val)
+}
+p.value <- perm_t_test(x,y,iter=1e3) #0.074
+```
+
+### Interval-wise Test
+
+```{r}
+fd<-fData(seq(0,23),(day2[,17:40]))
+day_hour <- as.matrix(day2[,17:40])
+groups <- day$workingday
+ITP.result <- ITPaovbspline(day_hour ~ groups, B=1000,nknots=20,order=3,method="responses") #ITPlmbspline per la regressione
+summary(ITP.result)
+plot(ITP.result,plot.adjpval = TRUE, xrange=c(0,23), )
+```
+
+### Conformal prediction
+
+```{r}
+day2011= subset(day2, day$yr==0)
+day2012= subset(day2, day$yr==1)
+
+a<-subset(day2,day2$workingday==1)
+a2011 = subset(day2011,day2011$workingday==1)
+a2012 = subset(day2012,day2012$workingday==1)
+
+b<-subset(day2,day2$workingday==0)
+b2011 = subset(day2011,day2011$workingday==0 & day2011$holiday==0)
+b2012 = subset(day2012,day2012$workingday==0 & day2012$holiday==0)
+
+par(mfrow=c(1,2))
+matplot(t(a2012[,17:40]), type='l', col='darkorange', ylim = c(0,1100), main = "2012 working day")
+matplot(t(b2012[,17:40]), type='l', col = 'forestgreen', ylim = c(0,1100), main= "2012 weekend")
+
+# 2012 workingday 5-20
+dataset <- a2012
+x.grid <- 5:20
+f_data <- fData(x.grid, dataset[,22:37])
+rho <- 0.5 # train and calibration split ratio
+
+alpha = 0.1
+
+l <- dim(dataset)[1] - ceiling(dim(dataset)[1] * rho)
+alpha_rag <- c(seq(1/(l+1), l/(l+1), 1/(l+1)))
+
+fun=mean_lists()
+x0=list(as.list(x.grid))
+
+band <- conformal.fun.split(NULL, NULL, f_data, NULL, x0, fun$train.fun, fun$predict.fun,
+                            alpha = alpha,
+                            split=NULL, seed=2024, randomized=FALSE, seed.rand=FALSE,
+                            verbose=FALSE, rho=rho, s.type="st-dev")
+
+upper_b_a <- band$up[[1]][[1]]
+lower_b_a <- band$lo[[1]][[1]]
+point_pred_a <- band$pred[[1]][[1]]
+
+# 2012 weekend 5-20
+dataset <- b2012
+x.grid <- 5:20
+f_data <- fData(x.grid, dataset[,22:37])
+rho <- 0.5 # train and calibration split ratio
+
+alpha = 0.1
+
+l <- dim(dataset)[1] - ceiling(dim(dataset)[1] * rho)
+alpha_rag <- c(seq(1/(l+1), l/(l+1), 1/(l+1)))
+
+fun=mean_lists()
+x0=list(as.list(x.grid))
+
+band <- conformal.fun.split(NULL, NULL, f_data, NULL, x0, fun$train.fun, fun$predict.fun,
+                            alpha = alpha,
+                            split=NULL, seed=2024, randomized=FALSE, seed.rand=FALSE,
+                            verbose=FALSE, rho=rho, s.type="st-dev")
+
+upper_b_b <- band$up[[1]][[1]]
+lower_b_b <- band$lo[[1]][[1]]
+point_pred_b <- band$pred[[1]][[1]]
+
+
+par(mfrow=c(1,2))
+plot(x.grid, upper_b_a, type='l', col="black", lty=2, xlab="hour", ylab="cnt", lwd=1.5,
+     ylim=c(min(lower_b_b),max(upper_b_a)),
+     main="Functional CP band working day")
+lines(x.grid, point_pred_a, type='l', col="darkorange", lwd=1.5)
+lines(x.grid, lower_b_a, type='l', col="black", lty=2, lwd=1.5)
+
+plot(x.grid, upper_b_b, type='l', col="black", lty=2, xlab="hour", ylab="cnt", lwd=1.5,
+     ylim=c(min(lower_b_b),max(upper_b_a)),
+     main="Functional CP band weekend")
+lines(x.grid, point_pred_b, type='l', col="forestgreen", lwd=1.5)
+lines(x.grid, lower_b_b, type='l', col="black", lty=2, lwd=1.5)
+
+par(mfrow=c(1,1))
+
+```
+
+## Weather 
+
+### Permutational test: regression
+
+```{r}
+n<- dim(day2)[1]
+result<-lm(registered ~ hum +temp + windspeed+instant,data=day2)
+summary(result)
+shapiro.test(result$residuals)$p
+qqnorm(result$residuals)
+qqline(result$residuals)
+#Let’s start with a global test
+B<-1000
+T0_glob <- summary(result)$adj.r.squared
+T_H0glob <- numeric(B)
+for(perm in 1:B){
+  permutation <- sample(n)
+  
+  Y.perm.glob <- with(day2,registered[permutation])
+  T_H0glob[perm] <- summary(lm(Y.perm.glob ~ hum +temp +instant+ windspeed,data=day2))$adj.r.squared
+}
+sum(T_H0glob>=T0_glob)/B#0
+
+T0_x1 <- abs(summary(result)$adj.r.squared)
+T0_x2 <- abs(summary(result)$adj.r.squared)
+T0_x3 <- abs(summary(result)$adj.r.squared)
+T0_x4<- abs(summary(result)$adj.r.squared)
+regr.H01 <- lm(registered~temp+windspeed+instant,data=day2)
+residuals.H01 <- regr.H01$residuals
+
+regr.H02 <- lm(registered~hum+windspeed+instant,data=day2)
+residuals.H02 <- regr.H02$residuals
+
+regr.H03 <- lm(registered~hum+temp+instant,data=day2)
+residuals.H03 <- regr.H03$residuals
+
+regr.H04 <- lm(registered~hum+temp+windspeed,data=day2)
+residuals.H04 <- regr.H04$residuals
+
+T_H01 <- T_H02 <- T_H03 <- T_H04<- numeric(B)
+set.seed(202454)
+for(perm in 1:B){
+  permutation <- sample(n)
+  
+  residuals.H01.perm <- residuals.H01[permutation]
+  Y.perm.H01 <- regr.H01$fitted + residuals.H01.perm
+  T_H01[perm] <- abs(summary(lm(Y.perm.H01 ~ hum+temp+windspeed+instant,data=day2 ))$adj.r.squared)
+  
+  residuals.H02.perm <- residuals.H02[permutation]
+  Y.perm.H02 <- regr.H02$fitted + residuals.H02.perm
+  T_H02[perm] <- abs(summary(lm(Y.perm.H02 ~ hum+temp+windspeed+instant,,data=day2))$adj.r.squared)
+  
+  residuals.H03.perm <- residuals.H03[permutation]
+  Y.perm.H03 <- regr.H03$fitted + residuals.H03.perm
+  T_H03[perm] <- abs(summary(lm(Y.perm.H03 ~ hum+temp+windspeed+instant,,data=day2))$adj.r.squared)
+  
+  residuals.H04.perm <- residuals.H04[permutation]
+  Y.perm.H04 <- regr.H04$fitted + residuals.H04.perm
+  T_H04[perm] <- abs(summary(lm(Y.perm.H04 ~ hum+temp+windspeed+instant,,data=day2))$adj.r.squared)
+}
+
+sum(T_H01>=T0_x1)/B#0.015
+sum(T_H02>=T0_x2)/B#0
+sum(T_H03>=T0_x3)/B#0.183
+sum(T_H04>=T0_x4)/B#0
+```
+
+### trend
+```{r}
+nbasis <- 10 
+bspline_basis <- create.bspline.basis(rangeval = c(1,730), nbasis = nbasis)
+
+lambda <- 1  
+fdParobj <- fdPar(bspline_basis, lambda = lambda)
+smoothed_fd <- smooth.basis(1:730, day2$registered, fdParobj)$fd
+func <- eval.fd(1:730, smoothed_fd)
+
+plot(1:730, day$registered, pch = 16, col = "gray", main = "Smoothing con Basi di Fourier",
+     xlab = "Tempo", ylab = "Valore")
+lines(1:730, func, col = "blue", lwd = 2)
+legend("topright", legend = c("Dati", "Smoothing"),
+       col = c("gray", "blue"), lty = c(NA, 1, 2), pch = c(16, NA, NA))
+stl_result <- stl(ts(func[,1], frequency = 364), s.window = "periodic")  
+plot(stl_result)
+
+```
+
+### Semiparametric regression
+
+```{r}
+model_gam_inter=gam(registered ~ instant + s(hum,bs='cr')+s(temp,bs='cr')+s(I(hum*temp),bs='cr'),data = day2)
+summary(model_gam_inter)
+
+model_gam_reduced=gam(cnt ~ instant + s(hum,bs='cr')+s(temp,bs='cr'),data = day)
+summary(model_gam_reduced)
+
+model_gam_tp = gam(cnt ~ instant + s(hum, temp, bs="tp", m=2), # m for order
+                   data = day)
+
+temp.grid=(seq(range(day$temp)[1],range(day$temp)[2],by=0.01))
+hum.grid=(seq(range(day$hum)[1],range(day$hum)[2],by=0.01))
+ist.grid=(seq(range(day$instant)[1],range(day$instant)[2],by=1))
+grid=expand.grid(instant = ist.grid, hum = hum.grid, temp = temp.grid)
+grid=as.data.frame(grid)
+pred_tp = predict(model_gam_reduced,
+                  newdata = grid)
+z_matrix <- matrix(pred_tp, nrow = length(hum.grid), ncol = length(temp.grid))
+
+open3d()
+persp3d(hum.grid,temp.grid, pred_tp, col = 'grey30')
+points3d(day$hum, day$temp, day$cnt, col = 'red', size = 5)
+
+hum.grid <- seq(min(day$hum), max(day$hum), length = 30)  # 30 punti tra min e max di hum
+temp.grid <- seq(min(day$temp), max(day$temp), length = 30)  # 30 punti tra min e max di temp
+
+# Creare una griglia combinando tutti i valori di hum e temp
+grid <- expand.grid(hum = hum.grid, temp = temp.grid, instant = 1)
+pred_tp <- predict(model_gam_reduced, newdata = grid)
+pred_tp_matrix <- matrix(pred_tp, nrow = length(hum.grid), ncol = length(temp.grid))
+open3d()
+persp3d(hum.grid, temp.grid, pred_tp_matrix, col = 'grey30', alpha = 0.7, 
+        xlab = "Humidity", ylab = "Temperature", zlab = "Bike Rentals")
+
+# Aggiungere i punti reali in rosso
+points3d(day$hum, day$temp, day$cnt, col = 'red', size = 5)
+predict(model_gam_reduced, newdata = data.frame(hum = 0.51, temp = 11/41,instant=739))
+predict(model_gam_inter, newdata = data.frame(hum = 0.51, temp = 11/41,instant=739))
+
+anova(model_gam_tp ,model_gam_inter, test = "F")
+shapiro.test(model_gam_tp$residuals)
+
+
+```
+
+
+# Casual
+
+### Permutational test: regression
+
+```{r}
+n<- dim(day)[1]
+result<-lm(casual ~ hum +temp + windspeed+instant,data=day)
+summary(result)
+shapiro.test(result$residuals)$p
+qqnorm(result$residuals)
+qqline(result$residuals)
+#Let’s start with a global test
+B<-1000
+T0_glob <- summary(result)$adj.r.squared
+T_H0glob <- numeric(B)
+for(perm in 1:B){
+  permutation <- sample(n)
+  
+  Y.perm.glob <- with(day,casual[permutation])
+  T_H0glob[perm] <- summary(lm(Y.perm.glob ~ hum +temp + windspeed+instant,data=day))$adj.r.squared
+}
+sum(T_H0glob>=T0_glob)/B#0
+
+T0_x1 <- abs(summary(result)$adj.r.squared)
+T0_x2 <- abs(summary(result)$adj.r.squared)
+T0_x3 <- abs(summary(result)$adj.r.squared)
+T0_x4 <- abs(summary(result)$adj.r.squared)
+
+regr.H01 <- lm(casual~temp+windspeed+instant,data=day)
+residuals.H01 <- regr.H01$residuals
+
+regr.H02 <- lm(casual~hum+windspeed+instant,data=day)
+residuals.H02 <- regr.H02$residuals
+
+regr.H03 <- lm(casual~hum+temp+instant,data=day)
+residuals.H03 <- regr.H03$residuals
+
+regr.H04 <- lm(casual~hum+temp+weathersit,data=day)
+residuals.H04 <- regr.H04$residuals
+
+T_H01 <- T_H02 <- T_H03 <-T_H04<- numeric(B)
+
+for(perm in 1:B){
+  permutation <- sample(n)
+  
+  residuals.H01.perm <- residuals.H01[permutation]
+  Y.perm.H01 <- regr.H01$fitted + residuals.H01.perm
+  T_H01[perm] <- abs(summary(lm(Y.perm.H01 ~ hum+temp+windspeed+instant,data=day))$adj.r.squared)
+  
+  residuals.H02.perm <- residuals.H02[permutation]
+  Y.perm.H02 <- regr.H02$fitted + residuals.H02.perm
+  T_H02[perm] <- abs(summary(lm(Y.perm.H02 ~ hum+temp+windspeed+instant,data=day))$adj.r.squared)
+  
+  residuals.H03.perm <- residuals.H03[permutation]
+  Y.perm.H03 <- regr.H03$fitted + residuals.H03.perm
+  T_H03[perm] <- abs(summary(lm(Y.perm.H03 ~ hum+temp+windspeed+instant,data=day))$adj.r.squared)
+  
+  residuals.H04.perm <- residuals.H04[permutation]
+  Y.perm.H04 <- regr.H04$fitted + residuals.H04.perm
+  T_H04[perm] <- abs(summary(lm(Y.perm.H04 ~ hum+temp+windspeed+instant,data=day))$adj.r.squared)
+}
+
+sum(T_H01>=T0_x1)/B#0.146
+sum(T_H02>=T0_x2)/B#0
+sum(T_H03>=T0_x3)/B#0.357 
+sum(T_H04>=T0_x4)/B#0.031
+```
+
+### Quantile regression
+
+```{r}
+col_weekend<-ifelse(day$workingday==1,"red","blue")
+plot(day$temp,day$casual, col=col_weekend, xlab="temperature", ylab="casual")
+```
+
