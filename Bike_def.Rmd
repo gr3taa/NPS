@@ -146,12 +146,67 @@ meteo<-day[,10:16]
 cor_meteo<-cor(meteo)
 corrplot(cor_meteo, method = "number")
 # Register and casual
+## hour
 plot(seq(0,23),colMeans(day2[,17:40]),type="l",xlab="hour",ylab="cnt",col='red')
 lines(seq(0,23),colMeans(day1[,17:40]),col='blue')
 legend("topleft", legend=c("registered","casual"), col=c("red","blue"), lty=1, lwd=2, cex=0.75)
 
+## day
+plot(day$instant,day$registered,xlab="day",ylab="rentals",col='red')
+points(day$instant,day$casual,col='blue')
+legend("topleft", legend=c("registered","casual"), col=c("red","blue"), lty=1, lwd=2, cex=0.75)
+
 ```
+
+# Registered vs casual
+
+```{r}
+t1 = day1[,17:40]
+t2 = day2[,17:40]
+
+t1.mean = colMeans(t1)
+t2.mean = colMeans(t2)
+
+matplot(seq(0,23),
+        t(rbind(t1.mean,t2.mean)), 
+        type='l', col=c(1,2), lty=1,
+        main="Sample multivariate means")
+
+n1 = dim(t1)[1]
+n2 = dim(t2)[1]
+n  = n1 + n2
+
+T20 = as.numeric(t(t1.mean-t2.mean) %*% (t1.mean-t2.mean))  # matrix (vector) product
+#T20 <- norm(t1.mean-t2.mean) same as before
+T20
+B<-1000
+T2 = numeric(B)
+set.seed(19)
+for(perm in 1:B){
+  # Random permutation of indexes
+  # When we apply permutations in a multivariate case, we keep the units together
+  # i.e., we only permute the rows of the data matrix
+  t_pooled = rbind(t1,t2)
+  permutation = sample(n)
+  t_perm = t_pooled[permutation,]
+  t1_perm = t_perm[1:n1,]
+  t2_perm = t_perm[(n1+1):n,]
+  
+  # Evaluation of the test statistic on permuted data
+  t1.mean_perm = colMeans(t1_perm)
+  t2.mean_perm = colMeans(t2_perm)
+  T2[perm]  = t(t1.mean_perm-t2.mean_perm) %*% (t1.mean_perm-t2.mean_perm) 
+}
+hist(T2,xlim=range(c(T2,T20)))
+abline(v=T20,col=3,lwd=4)
+p_val = sum(T2>=T20)/B
+p_val#0
+```
+
+
+
 # Registered
+
 
 ## Hour usage
 
