@@ -1,0 +1,31 @@
+var.test(a$cnt, b$cnt)
+plot(working$temp, working$casual, ylim=c(0,3500), col=ifelse(working$yr==0,'red','blue'))
+plot(we$temp, we$casual, ylim=c(0,3500), col=ifelse(we$yr==0,'red','blue'))
+plot(working$temp, working$registered,col=ifelse(working$yr==0,'red','blue'))
+plot(we$temp, we$registered,col=ifelse(we$yr==0,'red','blue'))
+par(mfrow=c(1,1))
+plot(day$instant,day$cnt,col=ifelse(day$season==1,'red',ifelse(day$season==2,'blue',ifelse(day$season==3,'green','yellow'))))
+legend("topleft", legend=c("winter", "spring", "summer", "fall"), fill=c("red", "blue", "green", "yellow"))
+library(mgcv)
+day2011<-subset(day,yr==0)
+day2012<-subset(day,yr==1)
+model_gam_reduced=gam(cnt ~ instant + s(hum,bs='cr')+s(temp,bs='cr'),data = day)
+summary(model_gam_reduced)
+c<-predict(model_gam_reduced,newdata=data.frame(hum=day2012$hum,temp=day2012$temp,instant=day2012$instant))
+mean(c-day2012$cnt)
+plot(day2012$instant,day2012$cnt)
+points(day2012$instant,c,col='red')
+data2013<-read.csv("2013Q1-capitalbikeshare-tripdata.csv")
+data2013$giorno<-as.Date(data2013$Start.date)
+rentals_per_day <- table(data2013$giorno)  # Contare gli affitti per giorno
+rentals_per_day <- as.data.frame(rentals_per_day)  # Convertire in data frame
+colnames(rentals_per_day) <- c("date", "rentals")
+temp<-c(4/41,6/41,8/41,4/41)
+hum<-c(0.7,0.8,0.8,0.9)
+pred<-predict(model_gam_reduced,newdata=data.frame(hum=hum,temp=temp,instant=seq(731+23,731+26)))
+pred-rentals_per_day$rentals[23:26]
+plot
+
+ddPlot(cbind(day2011$instant,day2011$cnt),cbind(day2011$instant,day2012$cnt[1:365]))
+ddPlot(cbind(day2011$instant,cnt_rapp[1:365]),cbind(day2011$instant,cnt_rapp[366:730]))
+ddPlot(cbind(day2011$instant,day2011$casual),cbind(day2011$instant,day2012$casual[1:365]))

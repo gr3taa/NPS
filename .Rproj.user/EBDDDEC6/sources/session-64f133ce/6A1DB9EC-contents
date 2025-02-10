@@ -1,0 +1,174 @@
+hour_wide_register <- hour %>%
+  pivot_wider(
+    names_from = hr, 
+    values_from = registered,
+    names_prefix = "cnt_hour_"
+  )
+
+#dataset che compatta le righe
+hour_wide_sommato_reg <- hour_wide_register %>%
+  group_by(dteday) %>%
+  summarise(across(starts_with("cnt_hour_"), sum, na.rm = TRUE))
+day2<- day %>%
+  left_join(hour_wide_sommato_reg, by = "dteday")
+##
+a<-subset(day2,day2$workingday==1)
+matplot(t(a[,17:40]), type='l')
+b<-subset(day2,day2$workingday==0)
+matplot(t(b[,17:40]), type='l')
+x<- a$cnt
+y<-b$cnt
+perm_t_test=function(x,y,iter=1e3){
+  T0=abs(mean(x)-mean(y))  # define the test statistic
+  T_stat=numeric(iter) # a vector to store the values of each iteration
+  x_pooled=c(x,y) # pooled sample
+  n=length(x_pooled)
+  n1=length(x)
+  print(sprintf("Using %s iterations to estimate the permutational distribution. There are actually %s possible permutations", iter, factorial(n)))
+  for(perm in 1:iter){ # loop for conditional MC
+    # permutation:
+    permutation <- sample(1:n)
+    x_perm <- x_pooled[permutation]
+    x1_perm <- x_perm[1:n1]
+    x2_perm <- x_perm[(n1+1):n]
+    # test statistic:
+    T_stat[perm] <- abs(mean(x1_perm) - mean(x2_perm))
+  }
+  # p-value
+  p_val <- sum(T_stat>=T0)/iter
+  return(p_val)
+}
+p.value <- perm_t_test(x,y,iter=1e3) #0.089
+# intervalwise test
+library(fdatest)
+library(data.table)
+library(fda)
+library(roahd)
+fd<-fData(seq(0,23),(day2[,17:40]))
+
+day_hour <- as.matrix(day2[,17:40])
+groups <- day$workingday
+ITP.result <- ITPaovbspline(day_hour ~ groups, B=1000,nknots=20,order=3,method="responses") #ITPlmbspline per la regressione
+summary(ITP.result)
+plot(ITP.result,plot.adjpval = TRUE, xrange=c(0,23), )
+## anova weather --
+B<-1000
+weathersit<-with(day2,as.factor(weathersit))
+fit <- aov(registered~weathersit,data = day2)
+g<-nlevels(weathersit)
+n<-dim(day2)[1]
+summary(fit)
+plot(weathersit, registered, xlab='weathersit',col=rainbow(g),main='Original Data',data=day2)
+T0 <- summary(fit)[[1]][1,4]  # extract the test statistic
+T_stat <- numeric(B) 
+for(perm in 1:B){
+  # Permutation:
+  permutation <- sample(1:n)
+  cnt_perm <- registered[permutation]
+  fit_perm <- aov(cnt_perm ~ weathersit)
+  
+  # Test statistic:
+  T_stat[perm] <- summary(fit_perm)[[1]][1,4]
+}
+hist(T_stat,xlim=range(c(T_stat,T0)),breaks=30)
+abline(v=T0,col=3,lwd=2)
+p_val <- sum(T_stat>=T0)/B
+p_val#0
+#conformal prediction-----
+
+
+library(dplyr) 
+library(ggplot2)
+library(knitr)
+library(broom)
+library(tidyr)
+library(progress)
+library(pbapply)
+library(dbscan)
+library(gridExtra)
+library(fda)
+library(roahd)
+library(conformalInference.fd)
+
+day2011= subset(day2, day$yr==0)
+day2012= subset(day2, day$yr==1)
+
+a<-subset(day2,day2$workingday==1)
+a2011 = subset(day2011,day2011$workingday==1)
+a2012 = subset(day2012,day2012$workingday==1)
+
+b<-subset(day2,day2$workingday==0)
+b2011 = subset(day2011,day2011$workingday==0 & day2011$holiday==0)
+b2012 = subset(day2012,day2012$workingday==0 & day2012$holiday==0)
+
+par(mfrow=c(1,2))
+matplot(t(a2012[,17:40]), type='l', col='darkorange', ylim = c(0,1100), main = "2012 working day")
+matplot(t(b2012[,17:40]), type='l', col = 'forestgreen', ylim = c(0,1100), main= "2012 weekend")
+
+# 2012 workingday 5-20
+dataset <- a2012
+x.grid <- 5:20
+f_data <- fData(x.grid, dataset[,22:37])
+rho <- 0.5 # train and calibration split ratio
+
+alpha = 0.1
+
+l <- dim(dataset)[1] - ceiling(dim(dataset)[1] * rho)
+alpha_rag <- c(seq(1/(l+1), l/(l+1), 1/(l+1)))
+
+fun=mean_lists()
+x0=list(as.list(x.grid))
+
+band <- conformal.fun.split(NULL, NULL, f_data, NULL, x0, fun$train.fun, fun$predict.fun,
+                            alpha = alpha,
+                            split=NULL, seed=2024, randomized=FALSE, seed.rand=FALSE,
+                            verbose=FALSE, rho=rho, s.type="st-dev")
+
+upper_b_a <- band$up[[1]][[1]]
+lower_b_a <- band$lo[[1]][[1]]
+point_pred_a <- band$pred[[1]][[1]]
+
+# 2012 weekend 5-20
+dataset <- b2012
+x.grid <- 5:20
+f_data <- fData(x.grid, dataset[,22:37])
+rho <- 0.5 # train and calibration split ratio
+
+alpha = 0.1
+
+l <- dim(dataset)[1] - ceiling(dim(dataset)[1] * rho)
+alpha_rag <- c(seq(1/(l+1), l/(l+1), 1/(l+1)))
+
+fun=mean_lists()
+x0=list(as.list(x.grid))
+
+band <- conformal.fun.split(NULL, NULL, f_data, NULL, x0, fun$train.fun, fun$predict.fun,
+                            alpha = alpha,
+                            split=NULL, seed=2024, randomized=FALSE, seed.rand=FALSE,
+                            verbose=FALSE, rho=rho, s.type="st-dev")
+
+upper_b_b <- band$up[[1]][[1]]
+lower_b_b <- band$lo[[1]][[1]]
+point_pred_b <- band$pred[[1]][[1]]
+
+
+par(mfrow=c(1,2))
+plot(x.grid, upper_b_a, type='l', col="black", lty=2, xlab="hour", ylab="cnt", lwd=1.5,
+     ylim=c(min(lower_b_b),max(upper_b_a)),
+     main="Functional CP band working day")
+lines(x.grid, point_pred_a, type='l', col="darkorange", lwd=1.5)
+lines(x.grid, lower_b_a, type='l', col="black", lty=2, lwd=1.5)
+
+plot(x.grid, upper_b_b, type='l', col="black", lty=2, xlab="hour", ylab="cnt", lwd=1.5,
+     ylim=c(min(lower_b_b),max(upper_b_a)),
+     main="Functional CP band weekend")
+lines(x.grid, point_pred_b, type='l', col="forestgreen", lwd=1.5)
+lines(x.grid, lower_b_b, type='l', col="black", lty=2, lwd=1.5)
+
+par(mfrow=c(1,1))
+
+
+fCasual<-fData(seq(0,23),(day1[,17:40]))
+
+fbplot <- invisible(fbplot(fCasual, main="Magnitude outliers"))
+day[fbplot$ID_outliers,]

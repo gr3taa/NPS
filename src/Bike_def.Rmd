@@ -675,7 +675,7 @@ anova(fit1, fit2, fit3)
 ```{r}
 friday<-subset(day1,day1$weekday==5)
 
-with(friday,plot(temp,casual,cex=.25,type="n",xlab="Temperature", ylab="Rentals"))
+with(friday,plot(temp,casual,cex=.25,type="n",xlab="Temperature", ylab="Rentals",ylim = c(0,3500)))
 with(friday,points(temp,casual,cex=.5))
 abline(rq(casual~temp,tau=.5,data=friday),col="black") 
 abline(lm(casual~temp,data=friday),lty=2,col="red") 
@@ -706,7 +706,7 @@ which(day_work$casual>1600)
 day_work$t <- 1:416 #eliminati outlier in riga 523 (holiday)
 colours <- rainbow(4)
 col <- colours[day_work$weekday]
-plot(day_work$temp,day_work$casual, col=col, xlab="Temperature", ylab="Rentals")
+plot(day_work$temp,day_work$casual, col=col, xlab="Temperature", ylab="Rentals",ylim=c(0,3500))
 names <- c("Monday","Tuesday","Wednesday","Thursday")
 legend("topleft", legend=names, col=col, pch=1)
 abline(rq(casual~temp,data=day_work,tau=.5),col="blue") 
